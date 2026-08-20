@@ -1,0 +1,102 @@
+// Interview_Full v1.0 - 2026-08-19 - Lancet Obesity Compass intake interview (FM port, session 2).
+// Unstored Text calc on Obesity Management. Sources from Code Library records
+// LOCEngine / LOCQuestions / LOCApp via ExecuteSQL (no relationship needed).
+// Prefill: PT_DOB/Gender/Race/HeightFt/HeightIn/CurrentWeight. Draft resume from InterviewJSON.
+// Save: web viewer calls FileMaker script "SaveInterview" with JSON parameter.
+Let ( [
+eng = ExecuteSQL ( "SELECT Source FROM \"Code Library\" WHERE Name=?" ; "" ; "" ; "LOCEngine" ) ;
+qst = ExecuteSQL ( "SELECT Source FROM \"Code Library\" WHERE Name=?" ; "" ; "" ; "LOCQuestions" ) ;
+app = ExecuteSQL ( "SELECT Source FROM \"Code Library\" WHERE Name=?" ; "" ; "" ; "LOCApp" ) ;
+guard = IsEmpty ( eng ) or eng = "?" or IsEmpty ( qst ) or IsEmpty ( app ) ;
+age = Year ( Get ( CurrentDate ) ) - Year ( PT_DOB ) - ( Get ( CurrentDate ) < Date ( Month ( PT_DOB ) ; Day ( PT_DOB ) ; Year ( Get ( CurrentDate ) ) ) ) ;
+nm = Substitute ( lnameFname ; ["\\";""] ; ["'";""] ; ["\"";""] ; [Char(10);¶] ; [¶;" "] ) ;
+sx = Substitute ( Gender ; ["\\";""] ; ["'";""] ; ["\"";""] ; [Char(10);¶] ; [¶;" "] ) ;
+eth = Substitute ( Race ; ["\\";""] ; ["'";""] ; ["\"";""] ; [Char(10);¶] ; [¶;" "] ) ;
+ft = If ( IsEmpty ( HeightFt ) ; "null" ; GetAsText ( HeightFt ) ) ;
+inch = If ( IsEmpty ( HeightIn ) ; "null" ; GetAsText ( HeightIn ) ) ;
+wt = If ( IsEmpty ( CurrentWeight ) ; "null" ; GetAsText ( Round ( CurrentWeight ; 1 ) ) ) ;
+draft = Substitute ( Base64Encode ( InterviewJSON ) ; [Char(13);""] ; [Char(10);""] )
+] ;
+If ( guard ;
+"<!DOCTYPE html><html><body style='font-family:sans-serif;padding:30px;color:#b91c1c'>Interview app sources missing. Check Code Library records: LOCEngine, LOCQuestions, LOCApp.</body></html>" ;
+
+"<!DOCTYPE html><html><head><meta charset='utf-8'><style>" &
+"*{box-sizing:border-box}" &
+"body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#f6f1e7;color:#2b2b26;margin:0;display:flex;min-height:100vh}" &
+"#rail{width:200px;min-width:200px;background:#fff;border-right:1px solid #e3d8c2;padding:14px 10px;position:sticky;top:0;height:100vh;overflow-y:auto}" &
+"#rail .rl{display:block;color:#5c5342;text-decoration:none;font-size:12.5px;padding:5px 8px;border-radius:6px;margin-bottom:2px}" &
+"#rail .rl:hover{background:#efe7d4;color:#0e5c4a}" &
+"#wrap{flex:1;padding:0 24px 60px}" &
+"#hdr{position:sticky;top:0;background:#f6f1e7;padding:12px 0 10px;border-bottom:1px solid #e3d8c2;z-index:5}" &
+"#hdr h1{margin:0;font-size:18px;color:#0e5c4a}" &
+"#hdr-demo{color:#7a6a4f;font-size:13px;margin-top:3px}" &
+"#anthro{margin-top:8px;font-size:13px;color:#5c5342}" &
+"#anthro input{width:60px;margin:0 8px 0 4px;padding:3px 6px;border:1px solid #c9b98f;border-radius:5px}" &
+"#statusrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}" &
+"#prog{font-size:12px;color:#7a6a4f}" &
+".chip{font-size:12px;border-radius:12px;padding:3px 10px;background:#fff;border:1px solid #e3d8c2}" &
+".sev-normal,.sev-negative{color:#15803d;border-color:#15803d}" &
+".sev-mild{color:#b45309}" &
+".sev-moderate,.sev-positive,.sev-insufficient{color:#c2570b;border-color:#c2570b}" &
+".sev-moderately-severe,.sev-severe{color:#b91c1c;border-color:#b91c1c;font-weight:700}" &
+".sev-unknown{color:#8a8a80}" &
+"#safety{display:none;background:#fde8e8;border:1px solid #b91c1c;color:#b91c1c;font-weight:600;padding:8px 12px;border-radius:8px;margin-top:8px}" &
+"#hints .hint{display:inline-block;background:#fff7e6;border:1px solid #b8860b;color:#8a6508;border-radius:8px;padding:5px 10px;margin:6px 6px 0 0;font-size:12.5px;cursor:pointer}" &
+".sec{margin-top:24px}" &
+".sec h2{font-size:15px;color:#0e5c4a;border-bottom:1px solid #e3d8c2;padding-bottom:5px}" &
+".q{background:#fff;border:1px solid #e3d8c2;border-radius:9px;padding:11px 14px;margin:10px 0}" &
+".q.sub{margin-left:26px;border-left:3px solid #d9c7a7}" &
+".q.danger{border-color:#b91c1c;background:#fff5f5}" &
+".qt{font-size:13.5px;font-weight:600}" &
+".qd{font-size:11.5px;color:#7a6a4f;margin-top:2px}" &
+".qi{margin-top:8px}" &
+".qi textarea,.qi input[type=text]{width:100%;padding:6px 8px;border:1px solid #c9b98f;border-radius:6px;font:inherit}" &
+".qi input[type=number]{width:110px;padding:6px 8px;border:1px solid #c9b98f;border-radius:6px}" &
+".qi select{padding:6px 8px;border:1px solid #c9b98f;border-radius:6px;font:inherit}" &
+".opt{display:block;font-size:13px;padding:3px 0;cursor:pointer}" &
+".tg{margin:12px 0}" &
+".tgbtn{background:#efe7d4;border:1px solid #d9c7a7;color:#5c5342;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;width:100%;text-align:left}" &
+".tg.open .tgbtn{background:#0e5c4a;border-color:#0e5c4a;color:#fff}" &
+".tgn{font-weight:400;opacity:.75}" &
+".tgbody{border:1px solid #e3d8c2;border-top:0;border-radius:0 0 9px 9px;padding:4px 10px;background:#fbf8f1}" &
+".selall{background:#efe7d4;border:1px solid #d9c7a7;color:#5c5342;border-radius:7px;padding:5px 12px;font-size:12.5px;cursor:pointer;margin-bottom:7px}" &
+".selall:hover{background:#0e5c4a;border-color:#0e5c4a;color:#fff}" &
+"#footer{margin-top:30px;display:flex;gap:10px}" &
+"#footer button{background:#0e5c4a;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:13.5px;cursor:pointer}" &
+"#diag{background:#fff;border:1px solid #e3d8c2;border-radius:9px;padding:12px 14px;margin-top:12px;font-size:13px;white-space:pre-wrap;word-break:break-word}" &
+"</style></head><body>" &
+"<div id='rail'></div>" &
+"<div id='wrap'>" &
+"<div id='hdr'>" &
+"<h1>Obesity Intake Interview</h1>" &
+"<div id='hdr-demo'></div>" &
+"<div id='anthro'>Height <input type='number' data-anthro='ft' style='width:46px'>ft <input type='number' data-anthro='inch' style='width:46px'>in" &
+" &nbsp; Weight <input type='number' data-anthro='wt'>lb &nbsp; Waist <input type='number' data-anthro='waist'>in</div>" &
+"<div id='statusrow'><span id='prog'></span><span id='scores'></span></div>" &
+"<div id='safety'>PHQ-9 Q9 positive - perform a direct safety assessment now</div>" &
+"<div id='hints'></div>" &
+"</div>" &
+"<div id='main'></div>" &
+"<div id='footer'>" &
+"<button id='btn-save'>Save to FileMaker</button>" &
+"<button id='btn-eval'>Run Lancet Diagnostic Assessment</button>" &
+"<button id='btn-export'>Preview JSON</button>" &
+"</div>" &
+"<div id='diag'></div>" &
+"</div>" &
+"<script>window.__locboot=[1];</script>" &
+"<script>" & eng & "</script>" &
+"<script>window.__locboot.push(2);</script>" &
+"<script>" & qst & "</script>" &
+"<script>window.__locboot.push(3);</script>" &
+"<script>" & app & "</script>" &
+"<script>window.__locboot.push(4);</script>" &
+"<script>" &
+"var FMBOOT={demo:{age:" & age & ",sex:'" & sx & "',ethnicity:'" & eth & "',name:'" & nm & "'}," &
+"anthro:{ft:" & ft & ",inch:" & inch & ",wt:" & wt & ",waist:null}};" &
+"var DRAFT='" & draft & "';" &
+"try{if(DRAFT){var dj=JSON.parse(atob(DRAFT));FMBOOT.answers=dj.responses||null;FMBOOT.toggles=dj.toggles||null;}}catch(e){}" &
+"try{LOCAPP.boot(FMBOOT);document.querySelectorAll('[data-anthro]').forEach(function(n){var k=n.getAttribute('data-anthro');if(LOCAPP.S.anthro[k]!=null){n.value=LOCAPP.S.anthro[k];}});}catch(e){document.body.innerHTML='<div style=padding:30px;color:#b91c1c>Boot failed: '+e.message+' (markers: '+JSON.stringify(window.__locboot)+')</div>';}" &
+"</script>" &
+"</body></html>"
+) )

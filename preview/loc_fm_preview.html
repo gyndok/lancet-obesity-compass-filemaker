@@ -1,0 +1,1147 @@
+<!DOCTYPE html><html><head><meta charset='utf-8'><title>Lancet Obesity Compass - FM Port Preview (Session 1)</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#f6f1e7;color:#2b2b26;margin:0;display:flex;min-height:100vh}
+#rail{width:210px;min-width:210px;background:#fff;border-right:1px solid #e3d8c2;padding:14px 10px;position:sticky;top:0;height:100vh;overflow-y:auto}
+#rail .rl{display:block;color:#5c5342;text-decoration:none;font-size:12.5px;padding:5px 8px;border-radius:6px;margin-bottom:2px}
+#rail .rl:hover{background:#efe7d4;color:#0e5c4a}
+#wrap{flex:1;padding:0 26px 60px}
+#hdr{position:sticky;top:0;background:#f6f1e7;padding:14px 0 10px;border-bottom:1px solid #e3d8c2;z-index:5}
+#hdr h1{margin:0;font-size:19px;color:#0e5c4a}
+#hdr-demo{color:#7a6a4f;font-size:13px;margin-top:3px}
+#anthro{margin-top:8px;font-size:13px;color:#5c5342}
+#anthro input{width:64px;margin:0 8px 0 4px;padding:3px 6px;border:1px solid #c9b98f;border-radius:5px}
+#statusrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}
+#prog{font-size:12px;color:#7a6a4f}
+.chip{font-size:12px;border-radius:12px;padding:3px 10px;background:#fff;border:1px solid #e3d8c2}
+.sev-normal,.sev-negative{color:#15803d;border-color:#15803d}
+.sev-mild{color:#b45309}
+.sev-moderate,.sev-positive,.sev-insufficient{color:#c2570b;border-color:#c2570b}
+.sev-moderately-severe,.sev-severe{color:#b91c1c;border-color:#b91c1c;font-weight:700}
+.sev-unknown{color:#8a8a80}
+#safety{display:none;background:#fde8e8;border:1px solid #b91c1c;color:#b91c1c;font-weight:600;padding:8px 12px;border-radius:8px;margin-top:8px}
+#hints .hint{display:inline-block;background:#fff7e6;border:1px solid #b8860b;color:#8a6508;border-radius:8px;padding:5px 10px;margin:6px 6px 0 0;font-size:12.5px;cursor:pointer}
+.sec{margin-top:26px}
+.sec h2{font-size:15px;color:#0e5c4a;border-bottom:1px solid #e3d8c2;padding-bottom:5px}
+.q{background:#fff;border:1px solid #e3d8c2;border-radius:9px;padding:11px 14px;margin:10px 0}
+.q.sub{margin-left:26px;border-left:3px solid #d9c7a7}
+.q.danger{border-color:#b91c1c;background:#fff5f5}
+.qt{font-size:13.5px;font-weight:600}
+.qd{font-size:11.5px;color:#7a6a4f;margin-top:2px}
+.qi{margin-top:8px}
+.qi textarea,.qi input[type=text]{width:100%;padding:6px 8px;border:1px solid #c9b98f;border-radius:6px;font:inherit}
+.qi input[type=number]{width:110px;padding:6px 8px;border:1px solid #c9b98f;border-radius:6px}
+.qi select{padding:6px 8px;border:1px solid #c9b98f;border-radius:6px;font:inherit}
+.opt{display:block;font-size:13px;padding:3px 0;cursor:pointer}
+.tg{margin:12px 0}
+.tgbtn{background:#efe7d4;border:1px solid #d9c7a7;color:#5c5342;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;width:100%;text-align:left}
+.tg.open .tgbtn{background:#0e5c4a;border-color:#0e5c4a;color:#fff}
+.tgn{font-weight:400;opacity:.75}
+.tgbody{border:1px solid #e3d8c2;border-top:0;border-radius:0 0 9px 9px;padding:4px 10px;background:#fbf8f1}
+.selall{background:#efe7d4;border:1px solid #d9c7a7;color:#5c5342;border-radius:7px;padding:5px 12px;font-size:12.5px;cursor:pointer;margin-bottom:7px}
+.selall:hover{background:#0e5c4a;border-color:#0e5c4a;color:#fff}
+#footer{margin-top:30px;display:flex;gap:10px}
+#footer button{background:#0e5c4a;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:13.5px;cursor:pointer}
+#diag{background:#fff;border:1px solid #e3d8c2;border-radius:9px;padding:12px 14px;margin-top:12px;font-size:13px;white-space:pre-wrap;word-break:break-word}
+</style></head><body>
+<div id='rail'></div>
+<div id='wrap'>
+<div id='hdr'>
+ <h1>Obesity Intake Interview <span style='font-size:11px;color:#a2916f'>FM port preview - session 1 skeleton</span></h1>
+ <div id='hdr-demo'></div>
+ <div id='anthro'>Height <input type='number' data-anthro='ft' style='width:46px'>ft <input type='number' data-anthro='inch' style='width:46px'>in
+  &nbsp; Weight <input type='number' data-anthro='wt'>lb &nbsp; Waist <input type='number' data-anthro='waist'>in
+  <span style='color:#a2916f'>(prefills from the chart in the FM build)</span></div>
+ <div id='statusrow'><span id='prog'></span><span id='scores'></span></div>
+ <div id='safety'>PHQ-9 Q9 positive - perform a direct safety assessment now</div>
+ <div id='hints'></div>
+</div>
+<div id='main'></div>
+<div id='footer'>
+ <button id='btn-eval'>Run Lancet Diagnostic Assessment</button>
+ <button id='btn-export'>Preview Save JSON</button>
+</div>
+<div id='diag'></div>
+</div>
+<script>var LOCENGINE = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // entry_engine.ts
+  var entry_engine_exports = {};
+  __export(entry_engine_exports, {
+    DiagnosticEngine: () => DiagnosticEngine,
+    computeAllScores: () => computeAllScores,
+    computeBmi: () => computeBmi,
+    formatScoreValue: () => formatScoreValue,
+    phq9SafetyFlagActive: () => phq9SafetyFlagActive,
+    scoreEpworth: () => scoreEpworth,
+    scoreGad7: () => scoreGad7,
+    scoreHungerVs: () => scoreHungerVs,
+    scorePavs: () => scorePavs,
+    scorePhq9: () => scorePhq9,
+    scoreScoff: () => scoreScoff,
+    scoreStopBang: () => scoreStopBang,
+    severityColor: () => severityColor
+  });
+
+  // lib/clinicalScoring.ts
+  var findAnswer = (responses, id) => {
+    const r = responses.find((x) => x.questionId === id);
+    if (!r) return null;
+    if (r.answer === "" || Array.isArray(r.answer) && r.answer.length === 0) return null;
+    return r.answer;
+  };
+  var parseScored = (v) => {
+    if (v === null || typeof v !== "string") return null;
+    const m = v.match(/\((\d+)\)/);
+    return m ? parseInt(m[1], 10) : null;
+  };
+  var yesNo = (v) => {
+    if (v === null || typeof v !== "string") return null;
+    if (v === "Yes") return 1;
+    if (v === "No") return 0;
+    return null;
+  };
+  var numAnswer = (v) => {
+    if (v === null) return null;
+    if (typeof v === "number") return v;
+    if (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v))) return Number(v);
+    return null;
+  };
+  var sumItems = (ids, parser, responses) => {
+    const vals = ids.map((id) => parser(findAnswer(responses, id)));
+    const answered = vals.filter((v) => v !== null);
+    return { sum: answered.reduce((a, b) => a + b, 0), answered: answered.length, vals };
+  };
+  var computeBmi = (bmi) => {
+    if (!bmi || !bmi.weight) return null;
+    const inches = bmi.useFeetInches ? (bmi.heightInFeet || 0) * 12 + (bmi.heightInInches || 0) : bmi.height || 0;
+    if (!inches) return null;
+    return bmi.weight / (inches * inches) * 703;
+  };
+  var phq9SafetyFlagActive = (responses) => {
+    const v = parseScored(findAnswer(responses, 78));
+    return v !== null && v > 0;
+  };
+  var scorePhq9 = (responses) => {
+    const ids = [70, 71, 72, 73, 74, 75, 76, 77, 78];
+    const { sum, answered, vals } = sumItems(ids, parseScored, responses);
+    const q9 = vals[8];
+    const flags = [];
+    if (q9 !== null && q9 > 0) flags.push("PHQ-9 Q9 positive \u2014 assess suicide risk directly");
+    let severity = "unknown";
+    let interpretation = `Incomplete (${answered}/9 items)`;
+    if (answered === 9) {
+      if (sum <= 4) {
+        severity = "normal";
+        interpretation = "Minimal depression";
+      } else if (sum <= 9) {
+        severity = "mild";
+        interpretation = "Mild depression";
+      } else if (sum <= 14) {
+        severity = "moderate";
+        interpretation = "Moderate depression";
+      } else if (sum <= 19) {
+        severity = "moderately-severe";
+        interpretation = "Moderately severe depression";
+      } else {
+        severity = "severe";
+        interpretation = "Severe depression";
+      }
+    } else if (answered > 0 && sum >= 5) {
+      if (sum >= 20) {
+        severity = "severe";
+        interpretation = `Incomplete (${answered}/9) \u2014 at least severe depression`;
+      } else if (sum >= 15) {
+        severity = "moderately-severe";
+        interpretation = `Incomplete (${answered}/9) \u2014 at least moderately severe depression`;
+      } else if (sum >= 10) {
+        severity = "moderate";
+        interpretation = `Incomplete (${answered}/9) \u2014 at least moderate depression`;
+      } else {
+        severity = "mild";
+        interpretation = `Incomplete (${answered}/9) \u2014 at least mild depression`;
+      }
+    }
+    return {
+      name: "Depression",
+      abbrev: "PHQ-9",
+      score: answered === 0 ? null : sum,
+      maxScore: 27,
+      interpretation,
+      severity,
+      itemsAnswered: answered,
+      totalItems: 9,
+      flags
+    };
+  };
+  var scoreGad7 = (responses) => {
+    const ids = [79, 80, 81, 82, 83, 84, 85];
+    const { sum, answered } = sumItems(ids, parseScored, responses);
+    let severity = "unknown";
+    let interpretation = `Incomplete (${answered}/7 items)`;
+    if (answered === 7) {
+      if (sum <= 4) {
+        severity = "normal";
+        interpretation = "Minimal anxiety";
+      } else if (sum <= 9) {
+        severity = "mild";
+        interpretation = "Mild anxiety";
+      } else if (sum <= 14) {
+        severity = "moderate";
+        interpretation = "Moderate anxiety";
+      } else {
+        severity = "severe";
+        interpretation = "Severe anxiety";
+      }
+    } else if (answered > 0 && sum >= 5) {
+      if (sum >= 15) {
+        severity = "severe";
+        interpretation = `Incomplete (${answered}/7) \u2014 at least severe anxiety`;
+      } else if (sum >= 10) {
+        severity = "moderate";
+        interpretation = `Incomplete (${answered}/7) \u2014 at least moderate anxiety`;
+      } else {
+        severity = "mild";
+        interpretation = `Incomplete (${answered}/7) \u2014 at least mild anxiety`;
+      }
+    }
+    return {
+      name: "Anxiety",
+      abbrev: "GAD-7",
+      score: answered === 0 ? null : sum,
+      maxScore: 21,
+      interpretation,
+      severity,
+      itemsAnswered: answered,
+      totalItems: 7,
+      flags: []
+    };
+  };
+  var scoreScoff = (responses) => {
+    const ids = [86, 87, 88, 89, 90];
+    const { sum, answered } = sumItems(ids, yesNo, responses);
+    let severity = "unknown";
+    let interpretation = `Incomplete (${answered}/5 items)`;
+    const flags = [];
+    if (sum >= 2) {
+      severity = "positive";
+      interpretation = answered === 5 ? "Positive screen \u2014 consider BED/ED evaluation" : `Incomplete (${answered}/5) \u2014 already positive (\u22652 yes)`;
+      flags.push("SCOFF \u22652 \u2014 consider Binge Eating Disorder / eating disorder evaluation");
+    } else if (answered === 5) {
+      severity = "negative";
+      interpretation = "Negative screen";
+    }
+    return {
+      name: "Eating Disorder",
+      abbrev: "SCOFF",
+      score: answered === 0 ? null : sum,
+      maxScore: 5,
+      interpretation,
+      severity,
+      itemsAnswered: answered,
+      totalItems: 5,
+      flags
+    };
+  };
+  var scoreStopBang = (responses, bmi) => {
+    const sIds = [95, 96, 97, 98, 99];
+    const { sum: stopSum, answered: stopAnswered } = sumItems(sIds, yesNo, responses);
+    const ageAns = numAnswer(findAnswer(responses, 1));
+    const sexAns = findAnswer(responses, 2);
+    const computedBmi = computeBmi(bmi);
+    let bangPoints = 0;
+    let bangAnswered = 0;
+    if (computedBmi !== null) {
+      bangAnswered++;
+      if (computedBmi > 35) bangPoints++;
+    }
+    if (ageAns !== null) {
+      bangAnswered++;
+      if (ageAns > 50) bangPoints++;
+    }
+    if (typeof sexAns === "string") {
+      bangAnswered++;
+      if (sexAns === "Male") bangPoints++;
+    }
+    const total = stopSum + bangPoints;
+    const answered = stopAnswered + bangAnswered;
+    let severity = "unknown";
+    let interpretation = `Incomplete (${answered}/8 items)`;
+    const flags = [];
+    if (answered === 8) {
+      if (total <= 2) {
+        severity = "normal";
+        interpretation = "Low OSA risk";
+      } else if (total <= 4) {
+        severity = "moderate";
+        interpretation = "Intermediate OSA risk";
+        flags.push("STOP-BANG \u22653 \u2014 consider OSA evaluation / sleep study");
+      } else {
+        severity = "severe";
+        interpretation = "High OSA risk";
+        flags.push("STOP-BANG \u22655 \u2014 high-risk OSA, strongly consider sleep study");
+      }
+    } else if (answered > 0 && total >= 3) {
+      if (total >= 5) {
+        severity = "severe";
+        interpretation = `Incomplete (${answered}/8) \u2014 already high OSA risk`;
+        flags.push("STOP-BANG \u22655 \u2014 high-risk OSA, strongly consider sleep study");
+      } else {
+        severity = "moderate";
+        interpretation = `Incomplete (${answered}/8) \u2014 at least intermediate OSA risk`;
+        flags.push("STOP-BANG \u22653 \u2014 consider OSA evaluation / sleep study");
+      }
+    }
+    return {
+      name: "OSA Risk",
+      abbrev: "STOP-BANG",
+      score: answered === 0 ? null : total,
+      maxScore: 8,
+      interpretation,
+      severity,
+      itemsAnswered: answered,
+      totalItems: 8,
+      flags
+    };
+  };
+  var scoreEpworth = (responses) => {
+    const ids = [100, 101, 102, 103, 104, 105, 106, 107];
+    const { sum, answered } = sumItems(ids, parseScored, responses);
+    let severity = "unknown";
+    let interpretation = `Incomplete (${answered}/8 items)`;
+    const flags = [];
+    if (answered === 8) {
+      if (sum <= 10) {
+        severity = "normal";
+        interpretation = "Normal daytime sleepiness";
+      } else if (sum <= 14) {
+        severity = "mild";
+        interpretation = "Mild excessive daytime sleepiness";
+        flags.push("ESS \u226511 \u2014 excessive daytime sleepiness, consider workup");
+      } else if (sum <= 17) {
+        severity = "moderate";
+        interpretation = "Moderate excessive daytime sleepiness";
+        flags.push("ESS 15\u201317 \u2014 moderate EDS, evaluate for OSA/sleep disorder");
+      } else {
+        severity = "severe";
+        interpretation = "Severe excessive daytime sleepiness";
+        flags.push("ESS \u226518 \u2014 severe EDS, prompt sleep evaluation indicated");
+      }
+    } else if (answered > 0 && sum >= 11) {
+      if (sum >= 18) {
+        severity = "severe";
+        interpretation = `Incomplete (${answered}/8) \u2014 at least severe daytime sleepiness`;
+        flags.push("ESS \u226518 \u2014 severe EDS, prompt sleep evaluation indicated");
+      } else if (sum >= 15) {
+        severity = "moderate";
+        interpretation = `Incomplete (${answered}/8) \u2014 at least moderate daytime sleepiness`;
+        flags.push("ESS 15\u201317 \u2014 moderate EDS, evaluate for OSA/sleep disorder");
+      } else {
+        severity = "mild";
+        interpretation = `Incomplete (${answered}/8) \u2014 at least mild daytime sleepiness`;
+        flags.push("ESS \u226511 \u2014 excessive daytime sleepiness, consider workup");
+      }
+    }
+    return {
+      name: "Daytime Sleepiness",
+      abbrev: "ESS",
+      score: answered === 0 ? null : sum,
+      maxScore: 24,
+      interpretation,
+      severity,
+      itemsAnswered: answered,
+      totalItems: 8,
+      flags
+    };
+  };
+  var scorePavs = (responses) => {
+    const days = numAnswer(findAnswer(responses, 108));
+    const minutes = numAnswer(findAnswer(responses, 109));
+    let answered = 0;
+    if (days !== null) answered++;
+    if (minutes !== null) answered++;
+    let total = null;
+    if (days !== null && minutes !== null) total = days * minutes;
+    let severity = "unknown";
+    let interpretation = `Incomplete (${answered}/2 items)`;
+    if (total !== null) {
+      if (total >= 150) {
+        severity = "normal";
+        interpretation = `${total} min/week \u2014 meets activity guidelines`;
+      } else if (total > 0) {
+        severity = "insufficient";
+        interpretation = `${total} min/week \u2014 below 150-min guideline`;
+      } else {
+        severity = "insufficient";
+        interpretation = "Inactive (0 min/week)";
+      }
+    }
+    return {
+      name: "Physical Activity",
+      abbrev: "PAVS",
+      score: total,
+      maxScore: 0,
+      scoreText: total !== null ? `${total} min/wk` : void 0,
+      interpretation,
+      severity,
+      itemsAnswered: answered,
+      totalItems: 2,
+      flags: []
+    };
+  };
+  var scoreHungerVs = (responses) => {
+    const a = findAnswer(responses, 68);
+    const b = findAnswer(responses, 69);
+    const isPositive = (v) => typeof v === "string" && (v === "Often true" || v === "Sometimes true");
+    let answered = 0;
+    if (a !== null) answered++;
+    if (b !== null) answered++;
+    let severity = "unknown";
+    let interpretation = `Incomplete (${answered}/2 items)`;
+    const flags = [];
+    if (isPositive(a) || isPositive(b)) {
+      severity = "positive";
+      interpretation = "Positive \u2014 food insecurity";
+      flags.push("Food insecurity identified \u2014 offer resources / social-work referral");
+    } else if (answered === 2) {
+      severity = "negative";
+      interpretation = "Negative \u2014 food secure";
+    }
+    return {
+      name: "Food Security",
+      abbrev: "Hunger VS",
+      score: null,
+      maxScore: 0,
+      interpretation,
+      severity,
+      itemsAnswered: answered,
+      totalItems: 2,
+      flags
+    };
+  };
+  var computeAllScores = (responses, bmi) => [
+    scorePhq9(responses),
+    scoreGad7(responses),
+    scoreScoff(responses),
+    scoreStopBang(responses, bmi),
+    scoreEpworth(responses),
+    scorePavs(responses),
+    scoreHungerVs(responses)
+  ];
+  var severityColor = (s) => {
+    switch (s) {
+      case "normal":
+      case "negative":
+        return "text-success";
+      case "mild":
+        return "text-amber-600";
+      case "moderate":
+      case "positive":
+      case "insufficient":
+        return "text-orange-600";
+      case "moderately-severe":
+      case "severe":
+        return "text-destructive";
+      default:
+        return "text-muted-foreground";
+    }
+  };
+  var formatScoreValue = (s) => {
+    if (s.scoreText) return s.scoreText;
+    if (s.score === null) return "\u2014";
+    if (s.maxScore > 0) return `${s.score}/${s.maxScore}`;
+    return String(s.score);
+  };
+
+  // lib/diagnostic-engine.ts
+  var DiagnosticEngine = class {
+    static evaluate(data) {
+      if (!this.hasMinimumData(data)) {
+        return null;
+      }
+      const criteria = this.assessCriteria(data);
+      const classification = this.classify(criteria);
+      const confidence = this.assessConfidence(data, criteria);
+      const recommendations = this.generateRecommendations(classification, criteria);
+      const reasoning = this.generateReasoning(classification, criteria);
+      const affectedSystems = this.identifyAffectedSystems(data);
+      return {
+        classification,
+        confidence,
+        criteria,
+        recommendations,
+        reasoning,
+        affectedSystems
+      };
+    }
+    static hasMinimumData(data) {
+      const anthro = data.anthropometrics;
+      return !!(anthro.height && anthro.weight) || !!anthro.bmi;
+    }
+    static assessCriteria(data) {
+      const adiposity = this.confirmExcessAdiposity(data.anthropometrics);
+      const organDysfunction = this.assessOrganDysfunction(data);
+      const functionalLimitations = this.assessFunctionalLimitations(data.functional);
+      const riskFactors = this.identifyRiskFactors(data);
+      return {
+        excessAdiposityConfirmed: adiposity.confirmed,
+        adiposityPresumedFromBmiAlone: adiposity.presumedFromBmiAlone,
+        organDysfunction,
+        functionalLimitations,
+        riskFactors
+      };
+    }
+    static confirmExcessAdiposity(anthro) {
+      let bmi = anthro.bmi;
+      if (!bmi && anthro.height && anthro.weight) {
+        bmi = anthro.weight / (anthro.height * anthro.height) * 703;
+      }
+      const bodyFatMeasured = anthro.bodyFatPercentage != null && !anthro.bodyFatIsEstimated;
+      if (bodyFatMeasured && anthro.bodyFatPercentage > 45) {
+        return { confirmed: true, presumedFromBmiAlone: false };
+      }
+      const ethnicity = anthro.ethnicity?.toLowerCase() || "";
+      const isAsian = ethnicity === "asian" || ethnicity.includes("east asian") || ethnicity.includes("south asian") || ethnicity.includes("southeast asian") || ethnicity === "chinese" || ethnicity === "japanese" || ethnicity === "korean" || ethnicity === "indian" || ethnicity === "vietnamese" || ethnicity === "thai" || ethnicity === "filipino";
+      const bmiPreObesityThreshold = isAsian ? 23 : 25;
+      const bmiNormalThreshold = isAsian ? 22.9 : 25;
+      let waistAbnormal = false;
+      if (anthro.waistCircumference) {
+        const thresholdInches = isAsian ? anthro.sex === "male" ? 35.4 : 31.5 : anthro.sex === "male" ? 40 : 35;
+        waistAbnormal = anthro.waistCircumference >= thresholdInches;
+      }
+      const whtrAbnormal = !!anthro.waistHeightRatio && anthro.waistHeightRatio >= 0.5;
+      const whrAbnormal = !!anthro.waistHipRatio && anthro.waistHipRatio >= (anthro.sex === "male" ? 0.9 : 0.85);
+      let bodyFatAbnormal = false;
+      if (bodyFatMeasured && anthro.age && anthro.age >= 18) {
+        const normalRange = this.getBodyFatNormalRange(anthro.age, anthro.sex ?? "female");
+        bodyFatAbnormal = !!normalRange && anthro.bodyFatPercentage > normalRange.upper;
+      }
+      const confirmatorySupport = waistAbnormal || whtrAbnormal || whrAbnormal || bodyFatAbnormal;
+      if (bmi && bmi > 40) {
+        return { confirmed: true, presumedFromBmiAlone: false };
+      }
+      if (bmi && bmi >= bmiPreObesityThreshold) {
+        return { confirmed: true, presumedFromBmiAlone: !confirmatorySupport };
+      }
+      if (bmi && bmi < bmiNormalThreshold) {
+        const count = [waistAbnormal, whtrAbnormal, whrAbnormal, bodyFatAbnormal].filter(Boolean).length;
+        return { confirmed: count >= 2, presumedFromBmiAlone: false };
+      }
+      return { confirmed: false, presumedFromBmiAlone: false };
+    }
+    static assessOrganDysfunction(data) {
+      const dysfunction = [];
+      const { clinical, laboratory } = data;
+      if (clinical.type2Diabetes) {
+        dysfunction.push("Metabolic: Type 2 diabetes");
+      } else if (laboratory.hba1c && laboratory.hba1c >= 6.5 || laboratory.fastingGlucose && laboratory.fastingGlucose >= 126) {
+        dysfunction.push("Metabolic: Hyperglycemia \u2014 confirm T2DM");
+      }
+      if (clinical.hypertension || clinical.cardiovascularDisease) {
+        dysfunction.push("Cardiovascular: Hypertension/CVD");
+      }
+      if (clinical.nafld || laboratory.fibrosis) {
+        dysfunction.push("Hepatic: NAFLD/fibrosis");
+      }
+      if (laboratory.egfr && laboratory.egfr < 60 || laboratory.microalbuminuria) {
+        dysfunction.push("Renal: Decreased eGFR/albuminuria");
+      }
+      if (clinical.sleepApnea) {
+        dysfunction.push("Respiratory: Sleep apnea");
+      }
+      if (clinical.pcos) {
+        dysfunction.push("Reproductive: PCOS");
+      }
+      if (clinical.osteoarthritis) {
+        dysfunction.push("Musculoskeletal: Osteoarthritis");
+      }
+      return dysfunction;
+    }
+    static assessFunctionalLimitations(functional) {
+      const limitations = [];
+      if (functional.mobilityLimitations) limitations.push("Mobility limitations");
+      if (functional.bathingDifficulty) limitations.push("Bathing difficulty");
+      if (functional.dressingDifficulty) limitations.push("Dressing difficulty");
+      if (functional.toiletingDifficulty) limitations.push("Toileting difficulty");
+      if (functional.continenceDifficulty) limitations.push("Continence difficulty");
+      if (functional.eatingDifficulty) limitations.push("Eating difficulty");
+      return limitations;
+    }
+    static identifyRiskFactors(data) {
+      const risks = [];
+      const { clinical, laboratory } = data;
+      if (clinical.breathlessness) risks.push("Breathlessness/dyspnea");
+      if (clinical.fatigue) risks.push("Chronic fatigue");
+      if (clinical.chronicPain) risks.push("Chronic pain");
+      if (clinical.urinaryIncontinence) risks.push("Urinary incontinence");
+      if (clinical.sleepDisorders) risks.push("Sleep disorders");
+      if (clinical.reflux) risks.push("GERD");
+      if (clinical.mentalHealth) risks.push("Mental health concerns");
+      if (laboratory.triglycerides && laboratory.triglycerides >= 150) {
+        risks.push("Elevated triglycerides");
+      }
+      if (laboratory.hdl && laboratory.hdl < 40) {
+        risks.push("Low HDL cholesterol");
+      }
+      if (laboratory.crp && laboratory.crp > 3) {
+        risks.push("Elevated CRP (inflammation)");
+      }
+      if (laboratory.alt && laboratory.alt > 40 || laboratory.ast && laboratory.ast > 40) {
+        risks.push("Elevated liver enzymes");
+      }
+      return risks;
+    }
+    static classify(criteria) {
+      if (!criteria.excessAdiposityConfirmed) {
+        return "no-obesity";
+      }
+      if (criteria.organDysfunction.length > 0 || criteria.functionalLimitations.length > 0) {
+        return "clinical-obesity";
+      }
+      return "preclinical-obesity";
+    }
+    static assessConfidence(data, criteria) {
+      let score = 0;
+      const anthro = data.anthropometrics;
+      if (anthro.height && anthro.weight) score++;
+      if (anthro.waistCircumference) score++;
+      if (anthro.bodyFatPercentage) score++;
+      const clinicalFields = Object.values(data.clinical).filter((v) => v !== void 0).length;
+      if (clinicalFields >= 3) score++;
+      const labFields = Object.values(data.laboratory).filter((v) => v !== void 0).length;
+      if (labFields >= 3) score++;
+      const funcFields = Object.values(data.functional).filter((v) => v !== void 0).length;
+      if (funcFields >= 2) score++;
+      if (score >= 5) return criteria.adiposityPresumedFromBmiAlone ? "medium" : "high";
+      if (score >= 3) return "medium";
+      return "low";
+    }
+    static generateRecommendations(classification, criteria) {
+      const recommendations = [];
+      switch (classification) {
+        case "clinical-obesity":
+          recommendations.push("Initiate comprehensive obesity management plan");
+          recommendations.push("Consider pharmacotherapy or surgical evaluation");
+          recommendations.push("Address identified organ dysfunction");
+          recommendations.push("Monitor for complications");
+          break;
+        case "preclinical-obesity":
+          recommendations.push("Implement lifestyle intervention program");
+          recommendations.push("Regular monitoring for disease progression");
+          recommendations.push("Preventive counseling for identified risk factors");
+          recommendations.push("Consider weight management referral");
+          break;
+        case "no-obesity":
+          recommendations.push("Continue healthy lifestyle practices");
+          recommendations.push("Routine health maintenance");
+          if (criteria.riskFactors.length > 0) {
+            recommendations.push("Address identified risk factors");
+          }
+          break;
+      }
+      return recommendations;
+    }
+    static generateReasoning(classification, criteria) {
+      let reasoning = "";
+      if (!criteria.excessAdiposityConfirmed) {
+        reasoning = "Excess adiposity not confirmed based on available anthropometric measurements.";
+      } else if (classification === "clinical-obesity") {
+        reasoning = `Excess adiposity confirmed with evidence of organ dysfunction (${criteria.organDysfunction.length} systems affected)`;
+        if (criteria.functionalLimitations.length > 0) {
+          reasoning += ` and functional limitations (${criteria.functionalLimitations.length} domains affected)`;
+        }
+        reasoning += ".";
+      } else if (classification === "preclinical-obesity") {
+        reasoning = "Excess adiposity confirmed but without evidence of organ dysfunction or significant functional limitations.";
+      }
+      if (criteria.excessAdiposityConfirmed && criteria.adiposityPresumedFromBmiAlone) {
+        reasoning += " Excess adiposity presumed from BMI alone \u2014 confirm with waist circumference or another anthropometric measure.";
+      }
+      return reasoning;
+    }
+    static identifyAffectedSystems(data) {
+      const systems = /* @__PURE__ */ new Set();
+      if (data.clinical.type2Diabetes || data.laboratory.hba1c && data.laboratory.hba1c >= 6.5 || data.laboratory.fastingGlucose && data.laboratory.fastingGlucose >= 126) {
+        systems.add("Endocrine/Metabolic");
+      }
+      if (data.laboratory.egfr && data.laboratory.egfr < 60 || data.laboratory.microalbuminuria) {
+        systems.add("Renal");
+      }
+      if (data.clinical.hypertension || data.clinical.cardiovascularDisease) {
+        systems.add("Cardiovascular");
+      }
+      if (data.clinical.nafld || data.laboratory.fibrosis) {
+        systems.add("Hepatic");
+      }
+      if (data.clinical.sleepApnea) {
+        systems.add("Respiratory");
+      }
+      if (data.clinical.pcos) {
+        systems.add("Reproductive");
+      }
+      if (data.clinical.osteoarthritis) {
+        systems.add("Musculoskeletal");
+      }
+      return Array.from(systems);
+    }
+    static getBodyFatNormalRange(age, sex) {
+      if (age < 18) return null;
+      const ranges = {
+        male: {
+          "18-29": { lower: 12, upper: 19 },
+          "30-39": { lower: 14, upper: 22 },
+          "40-49": { lower: 16, upper: 24 },
+          "50-59": { lower: 18, upper: 26 },
+          "60+": { lower: 20, upper: 28 }
+        },
+        female: {
+          "18-29": { lower: 24, upper: 32 },
+          "30-39": { lower: 25, upper: 34 },
+          "40-49": { lower: 27, upper: 36 },
+          "50-59": { lower: 29, upper: 38 },
+          "60+": { lower: 30, upper: 40 }
+        }
+      };
+      const genderRanges = sex === "male" ? ranges.male : ranges.female;
+      if (age >= 18 && age <= 29) return genderRanges["18-29"];
+      if (age >= 30 && age <= 39) return genderRanges["30-39"];
+      if (age >= 40 && age <= 49) return genderRanges["40-49"];
+      if (age >= 50 && age <= 59) return genderRanges["50-59"];
+      if (age >= 60) return genderRanges["60+"];
+      return null;
+    }
+  };
+  return __toCommonJS(entry_engine_exports);
+})();
+</script>
+<script>/* LOC-FM questions.js v1.1 (counseling checklist always visible + select-all, q40 restored) - pruned catalog per INTERVIEW_SPEC.md 2026-08-19 */
+var LOCQ = (function () {
+  var FOUR = ['Not at all (0)', 'Several days (1)', 'More than half the days (2)', 'Nearly every day (3)'];
+  var ESSP = ['Would never doze (0)', 'Slight chance (1)', 'Moderate chance (2)', 'High chance (3)'];
+  var YN = ['Yes', 'No'];
+
+  /* toggle groups: instrument metadata */
+  var TOGGLES = {
+    hvs:  { label: 'Hunger Vital Sign', ids: [68, 69] },
+    phq9: { label: 'PHQ-9 Depression', ids: [70, 71, 72, 73, 74, 75, 76, 77, 78] },
+    gad7: { label: 'GAD-7 Anxiety', ids: [79, 80, 81, 82, 83, 84, 85] },
+    scoff:{ label: 'SCOFF Eating Disorder', ids: [86, 87, 88, 89, 90] },
+    sb:   { label: 'STOP-BANG OSA', ids: [95, 96, 97, 98, 99] },
+    ess:  { label: 'Epworth Sleepiness', ids: [100, 101, 102, 103, 104, 105, 106, 107] }
+  };
+
+  var Q = {};
+  function q(id, question, type, options, extra) {
+    Q[id] = Object.assign({ id: id, question: question, type: type, options: options || null }, extra || {});
+  }
+
+  /* Introduction */
+  q(3, 'Primary goal for this visit?', 'textarea');
+  q(4, 'Does the patient have a primary care provider?', 'radio', YN);
+  /* Weight History */
+  q(5, 'Tell me the story of your weight', 'textarea', null,
+    { description: 'Age of onset, triggers, highest/lowest adult weight, prior attempts and what happened after' });
+  q(52, 'What is your personal weight loss goal (lbs)?', 'number');
+  q(62, 'Highest adult weight (lbs)?', 'number', null, { prefillField: 'HPIHighestWeight' });
+  q(64, 'Lowest adult weight since age 20 (lbs)?', 'number', null, { prefillField: 'HPILowestWeight' });
+  /* Hunger VS (toggle) */
+  q(68, 'In the past 12 months, we worried whether our food would run out before we got money to buy more.', 'radio', ['Often true', 'Sometimes true', 'Never true']);
+  q(69, 'In the past 12 months, the food we bought just didn\'t last and we didn\'t have money to get more.', 'radio', ['Often true', 'Sometimes true', 'Never true']);
+  /* Meds & Allergies */
+  q(11, 'Current medications?', 'textarea', null, { prefillField: 'MedicationRaw' });
+  q(12, 'Allergies?', 'text', null, { prefillField: 'Allergies' });
+  q(13, 'Any known weight-promoting medications?', 'radio', ['Yes', 'No', 'Unsure']);
+  /* Contraindication Screening */
+  q(14, 'History of Medullary Thyroid Carcinoma (MTC)?', 'radio', YN);
+  q(15, 'History of MEN2?', 'radio', YN);
+  q(16, 'Family history of medullary thyroid cancer or MEN2?', 'radio', YN);
+  q(17, 'Any history of pancreatitis, gastroparesis, or gallbladder disease?', 'checkbox', ['Pancreatitis', 'Gastroparesis', 'Gallbladder disease', 'None']);
+  q(18, 'Any GI symptoms (reflux, nausea, etc.)?', 'text');
+  q(19, 'Current contraception method?', 'text', null, { description: 'Method only - pregnancy intent is asked in Past Medical History' });
+  q(20, 'Does the patient have diabetes and use insulin?', 'radio', YN);
+  /* Medical History */
+  q(21, 'Other medical conditions or surgeries?', 'textarea');
+  q(23, 'Family history (obesity, thyroid, metabolic, cancer)?', 'textarea');
+  /* PHQ-9 */
+  var phq = ['little interest or pleasure in doing things', 'feeling down, depressed, or hopeless',
+    'trouble falling or staying asleep, or sleeping too much', 'feeling tired or having little energy',
+    'poor appetite or overeating', 'feeling bad about yourself, or that you are a failure or have let yourself or your family down',
+    'trouble concentrating on things, such as reading or watching TV',
+    'moving or speaking so slowly that others noticed - or the opposite, being fidgety or restless',
+    'thoughts that you would be better off dead, or of hurting yourself'];
+  phq.forEach(function (t, i) {
+    q(70 + i, 'PHQ-9 Q' + (i + 1) + ': Over the last 2 weeks, ' + t + '?', 'radio', FOUR,
+      i === 8 ? { safety: true, description: 'Any non-zero response should prompt a direct safety assessment.' } : null);
+  });
+  /* GAD-7 */
+  var gad = ['feeling nervous, anxious, or on edge', 'not being able to stop or control worrying',
+    'worrying too much about different things', 'trouble relaxing',
+    'being so restless that it\'s hard to sit still', 'becoming easily annoyed or irritable',
+    'feeling afraid as if something awful might happen'];
+  gad.forEach(function (t, i) { q(79 + i, 'GAD-7 Q' + (i + 1) + ': Over the last 2 weeks, ' + t + '?', 'radio', FOUR); });
+  /* SCOFF */
+  q(86, 'SCOFF Q1: Do you make yourself Sick because you feel uncomfortably full?', 'radio', YN);
+  q(87, 'SCOFF Q2: Do you worry you have lost Control over how much you eat?', 'radio', YN);
+  q(88, 'SCOFF Q3: Have you recently lost more than One stone (~14 lbs) in a 3-month period?', 'radio', YN);
+  q(89, 'SCOFF Q4: Do you believe yourself to be Fat when others say you are too thin?', 'radio', YN);
+  q(90, 'SCOFF Q5: Would you say that Food dominates your life?', 'radio', YN);
+  /* Functional / Symptoms */
+  q(54, 'Limitations in Activities of Daily Living (ADL)?', 'checkbox', ['Mobility Limitations', 'Bathing Difficulty', 'Dressing Difficulty', 'Toileting Difficulty', 'Continence Issues', 'Eating Difficulty', 'None']);
+  q(55, 'Respiratory or exercise-related symptoms?', 'checkbox', ['Breathlessness/Dyspnea', 'Chronic Fatigue', 'None']);
+  q(56, 'Physical symptoms?', 'checkbox', ['Chronic Pain', 'Urinary Incontinence', 'Gastroesophageal Reflux (GERD)', 'None']);
+  /* Past Medical History */
+  q(58, 'Metabolic or endocrine conditions?', 'checkbox', ['Type 2 Diabetes', 'Polycystic Ovary Syndrome (PCOS)', 'None']);
+  q(59, 'Cardiovascular conditions?', 'checkbox', ['Hypertension', 'Cardiovascular Disease', 'None']);
+  q(60, 'Other conditions?', 'checkbox', ['Sleep Apnea', 'NAFLD/NASH', 'Osteoarthritis', 'None']);
+  q(91, 'Personal history of obesity-related cancer?', 'checkbox', ['Breast', 'Ovarian', 'Endometrial/Uterine', 'Esophageal', 'Gastric', 'Pancreatic', 'Colon/Colorectal', 'Other cancer', 'None']);
+  q(94, 'Fertility/pregnancy intent within the next 2 years?', 'radio', ['Trying to conceive now', 'Planning within 2 years', 'Not planning', 'Unsure', 'Not applicable'],
+    { description: 'Critical for GLP-1 counseling - avoid pregnancy during treatment and ~2 months before discontinuation.' });
+  /* STOP-BANG */
+  q(95, 'STOP-BANG S: Do you Snore loudly - louder than talking, or heard through closed doors?', 'radio', YN);
+  q(96, 'STOP-BANG T: Do you often feel Tired, fatigued, or sleepy during the daytime?', 'radio', YN);
+  q(97, 'STOP-BANG O: Has anyone Observed you stop breathing, choking, or gasping during sleep?', 'radio', YN);
+  q(98, 'STOP-BANG P: Do you have, or are you being treated for, high blood Pressure?', 'radio', YN);
+  q(99, 'STOP-BANG N: Is your Neck circumference greater than 16 inches (40 cm)?', 'radio', YN,
+    { description: 'BMI, Age, and sex points auto-derive from the header.' });
+  /* Epworth */
+  var ess = ['Sitting and reading', 'Watching TV', 'Sitting inactive in a public place (theater, meeting)',
+    'As a passenger in a car for an hour without a break', 'Lying down to rest in the afternoon when circumstances permit',
+    'Sitting and talking to someone', 'Sitting quietly after a lunch without alcohol',
+    'In a car, while stopped for a few minutes in traffic'];
+  ess.forEach(function (t, i) { q(100 + i, 'Epworth Q' + (i + 1) + ': ' + t + ' - chance of dozing?', 'radio', ESSP); });
+  /* Lifestyle */
+  q(24, 'Describe current diet / a typical day of eating.', 'textarea');
+  q(108, 'PAVS Q1: Days per week of moderate-to-vigorous physical activity (like a brisk walk)?', 'number');
+  q(109, 'PAVS Q2: On those days, minutes of moderate-to-vigorous activity on average?', 'number',
+    null, { description: 'Weekly total = days x minutes. Under 150 min/week = inactive.' });
+  q(29, 'Strength training sessions per week?', 'number');
+  q(30, 'Average sleep hours per night?', 'number', null, { writeBack: 'HoursofSleep' });
+  q(31, 'Sleep quality concerns (snoring, daytime sleepiness)?', 'text', null, { gateway: 'sleep' });
+  q(32, 'Mood or stress issues to note?', 'text', null, { gateway: 'mood' });
+  q(33, 'Alcohol use?', 'text', null, { writeBack: 'Alcohol' });
+  q(34, 'Tobacco/vaping/substance use?', 'text', null, { writeBack: 'Smoking' });
+  /* Medication Preferences */
+  q(35, 'Previously used GLP-1 medications?', 'radio', YN);
+  q(36, 'Preferred medication?', 'dropdown', ['Semaglutide', 'Tirzepatide', 'Open to either']);
+  q(38, 'Any concern about compounded options?', 'radio', YN);
+  /* Education & Counseling */
+  q(39, 'GLP-1 warnings and contraindications discussed?', 'checkbox', ['Thyroid C-cell tumor risk (MTC/MEN2)', 'Severe stomach problems', 'Kidney problems/dehydration', 'Gallbladder problems', 'Pancreatitis', 'Serious allergic reactions', 'Hypoglycemia risk', 'Vision changes', 'Tachycardia', 'Depression/suicidal thoughts', 'Birth control interaction'],
+    { selectAll: 'Mark all discussed' });
+  q(40, 'Common side effects reviewed (nausea, diarrhea, vomiting, constipation, injection site reactions, etc.)?', 'radio', YN);
+  q(41, 'Patient questions or concerns about medication risks?', 'textarea');
+  q(42, 'Patient verbalized understanding of risks and benefits?', 'radio', ['Yes', 'No', 'Partial understanding - requires follow-up']);
+  /* Plan & Follow-Up */
+  q(43, 'Selected medication and starting dose?', 'text', null, { writeBack: 'Prescription' });
+  q(44, 'Labs ordered?', 'checkbox', ['A1C', 'Comprehensive metabolic panel', 'TSH', 'Lipid panel', 'Patient had done at PCP and will send to me'], { writeBack: 'OrderTests' });
+  q(201, 'Lab details (optional)', 'text', null, { subOf: 44 });
+  q(46, 'Body composition scan recommended?', 'radio', YN);
+  q(47, 'Sleep testing ordered?', 'radio', ['Yes', 'No', 'Suggest PCP order study', 'Not applicable']);
+  q(48, 'Dietitian referral needed?', 'radio', ['Yes', 'No', 'Already scheduled']);
+  q(50, 'Follow-up interval?', 'text', null, { writeBack: 'returntoclinic' });
+  q(51, 'Additional notes or instructions?', 'textarea');
+
+  var SECTIONS = [
+    { name: 'Introduction', items: [3, 4] },
+    { name: 'Weight History', items: [5, 52, 62, 64] },
+    { name: 'Food Security', toggle: 'hvs' },
+    { name: 'Medications & Allergies', items: [11, 12, 13] },
+    { name: 'Contraindication Screening', items: [14, 15, 16, 17, 18, 19, 20] },
+    { name: 'Medical History', items: [21, 23] },
+    { name: 'Mood Screens', toggles: ['phq9', 'gad7'] },
+    { name: 'Eating Behavior', toggle: 'scoff' },
+    { name: 'Functional Limitations', items: [54] },
+    { name: 'Current Symptoms', items: [55, 56] },
+    { name: 'Past Medical History', items: [58, 59, 60, 91, 94] },
+    { name: 'Sleep Screening', toggles: ['sb', 'ess'] },
+    { name: 'Lifestyle', items: [24, 108, 109, 29, 30, 31, 32, 33, 34] },
+    { name: 'Medication Preferences', items: [35, 36, 38] },
+    { name: 'Education & Counseling', items: [39, 40, 41, 42] },
+    { name: 'Plan & Follow-Up', items: [43, 44, 201, 46, 47, 48, 50, 51] }
+  ];
+
+  return { Q: Q, SECTIONS: SECTIONS, TOGGLES: TOGGLES };
+})();
+if (typeof module !== 'undefined') { module.exports = LOCQ; }
+</script>
+<script>/* LOC-FM app.js v1.1 (select-all checkbox support) - session-1 skeleton: state + render + toggles + gateways + live scores */
+var LOCAPP = (function () {
+  var E = (typeof LOCENGINE !== 'undefined') ? LOCENGINE : null;
+  var S = {
+    responses: {},                  /* id -> string | string[] | number */
+    toggles: { hvs: false, phq9: false, gad7: false, scoff: false, sb: false, ess: false },
+    prefill: { age: null, sex: null, ethnicity: null, name: '' },  /* from FM in session 2 */
+    anthro: { ft: null, inch: null, wt: null, waist: null }
+  };
+
+  /* ---------- pure state helpers (node-testable) ---------- */
+  function setAnswer(id, v) { if (v === '' || v == null || (Array.isArray(v) && !v.length)) { delete S.responses[id]; } else { S.responses[id] = v; } }
+  function getAnswer(id) { return (id in S.responses) ? S.responses[id] : null; }
+  function respArray() {
+    var out = [];
+    Object.keys(S.responses).forEach(function (k) { out.push({ questionId: +k, answer: S.responses[k] }); });
+    /* virtual demographic responses for STOP-BANG auto items */
+    if (S.prefill.age != null) { out.push({ questionId: 1, answer: S.prefill.age }); }
+    if (S.prefill.sex) { out.push({ questionId: 2, answer: S.prefill.sex }); }
+    return out;
+  }
+  function bmiInput() {
+    return { height: null, weight: S.anthro.wt, heightInFeet: S.anthro.ft, heightInInches: S.anthro.inch, useFeetInches: true };
+  }
+  function bmiValue() { return E ? E.computeBmi(bmiInput()) : null; }
+  function has(id, opt) { var v = getAnswer(id); return Array.isArray(v) && v.indexOf(opt) >= 0; }
+  function buildPatientData() {
+    var heightIn = (S.anthro.ft || 0) * 12 + (S.anthro.inch || 0);
+    return {
+      anthropometrics: {
+        height: heightIn || undefined, weight: S.anthro.wt || undefined,
+        waistCircumference: S.anthro.waist || undefined,
+        age: S.prefill.age || undefined,
+        sex: S.prefill.sex ? S.prefill.sex.toLowerCase() : undefined,
+        ethnicity: S.prefill.ethnicity || undefined
+      },
+      clinical: {
+        breathlessness: has(55, 'Breathlessness/Dyspnea') || undefined,
+        fatigue: has(55, 'Chronic Fatigue') || undefined,
+        chronicPain: has(56, 'Chronic Pain') || undefined,
+        urinaryIncontinence: has(56, 'Urinary Incontinence') || undefined,
+        reflux: has(56, 'Gastroesophageal Reflux (GERD)') || undefined,
+        type2Diabetes: has(58, 'Type 2 Diabetes') || undefined,
+        pcos: has(58, 'Polycystic Ovary Syndrome (PCOS)') || undefined,
+        hypertension: has(59, 'Hypertension') || undefined,
+        cardiovascularDisease: has(59, 'Cardiovascular Disease') || undefined,
+        sleepApnea: has(60, 'Sleep Apnea') || undefined,
+        nafld: has(60, 'NAFLD/NASH') || undefined,
+        osteoarthritis: has(60, 'Osteoarthritis') || undefined
+      },
+      functional: {
+        mobilityLimitations: has(54, 'Mobility Limitations') || undefined,
+        bathingDifficulty: has(54, 'Bathing Difficulty') || undefined,
+        dressingDifficulty: has(54, 'Dressing Difficulty') || undefined,
+        toiletingDifficulty: has(54, 'Toileting Difficulty') || undefined,
+        continenceDifficulty: has(54, 'Continence Issues') || undefined,
+        eatingDifficulty: has(54, 'Eating Difficulty') || undefined
+      },
+      laboratory: {}
+    };
+  }
+  function visibleIds() {
+    var ids = [];
+    LOCQ.SECTIONS.forEach(function (sec) {
+      (sec.items || []).forEach(function (id) {
+        var qd = LOCQ.Q[id];
+        if (qd.subOf) {
+          var parent = getAnswer(qd.subOf);
+          if (qd.subOf === 200) { if (parent !== 'Partial - itemize below') { return; } }
+          else if (parent == null) { return; }
+        }
+        ids.push(id);
+      });
+      var tgs = sec.toggles || (sec.toggle ? [sec.toggle] : []);
+      tgs.forEach(function (t) { if (S.toggles[t]) { ids = ids.concat(LOCQ.TOGGLES[t].ids); } });
+    });
+    return ids;
+  }
+  function progress() {
+    var ids = visibleIds();
+    var answered = ids.filter(function (id) { return getAnswer(id) != null; }).length;
+    return { answered: answered, total: ids.length };
+  }
+  function gatewayHints() {
+    var h = [];
+    if (getAnswer(31) && !(S.toggles.sb || S.toggles.ess)) { h.push({ from: 31, msg: 'Sleep concern noted - consider opening STOP-BANG / Epworth', open: ['sb'] }); }
+    if (getAnswer(32) && !(S.toggles.phq9 || S.toggles.gad7)) { h.push({ from: 32, msg: 'Mood/stress noted - consider opening PHQ-9 / GAD-7', open: ['phq9'] }); }
+    if (E && S.toggles.sb && !S.toggles.ess) {
+      var sb = E.scoreStopBang(respArray(), bmiInput());
+      if (sb.score != null && sb.score >= 3) { h.push({ from: 99, msg: 'STOP-BANG ' + sb.score + ' - consider Epworth to quantify sleepiness', open: ['ess'] }); }
+    }
+    return h;
+  }
+  function activeScores() {
+    if (!E) { return []; }
+    var r = respArray(), out = [];
+    if (S.toggles.phq9) { out.push(E.scorePhq9(r)); }
+    if (S.toggles.gad7) { out.push(E.scoreGad7(r)); }
+    if (S.toggles.scoff) { out.push(E.scoreScoff(r)); }
+    if (S.toggles.sb) { out.push(E.scoreStopBang(r, bmiInput())); }
+    if (S.toggles.ess) { out.push(E.scoreEpworth(r)); }
+    if (S.toggles.hvs) { out.push(E.scoreHungerVs(r)); }
+    out.push(E.scorePavs(r));
+    return out;
+  }
+  function safetyFlag() { return E ? E.phq9SafetyFlagActive(respArray()) : false; }
+  function evaluate() { return E ? E.DiagnosticEngine.evaluate(buildPatientData()) : null; }
+  function exportJSON() {
+    return JSON.stringify({
+      version: 1, savedAt: new Date().toISOString(),
+      prefill: S.prefill, anthro: S.anthro, toggles: S.toggles,
+      responses: S.responses,
+      scores: activeScores(), diagnostic: evaluate()
+    });
+  }
+
+  /* ---------- DOM render (browser only) ---------- */
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function el(id) { return document.getElementById(id); }
+
+  function inputHtml(qd) {
+    var v = getAnswer(qd.id), id = qd.id;
+    if (qd.type === 'textarea') { return '<textarea data-q="' + id + '" rows="3">' + esc(v || '') + '</textarea>'; }
+    if (qd.type === 'text') { return '<input type="text" data-q="' + id + '" value="' + esc(v || '') + '">'; }
+    if (qd.type === 'number') { return '<input type="number" data-q="' + id + '" value="' + esc(v == null ? '' : v) + '">'; }
+    if (qd.type === 'dropdown') {
+      var o = '<option value=""></option>';
+      qd.options.forEach(function (op) { o += '<option' + (v === op ? ' selected' : '') + '>' + esc(op) + '</option>'; });
+      return '<select data-q="' + id + '">' + o + '</select>';
+    }
+    if (qd.type === 'radio' || qd.type === 'macro') {
+      return qd.options.map(function (op) {
+        return '<label class="opt"><input type="radio" name="q' + id + '" data-q="' + id + '" value="' + esc(op) + '"' + (v === op ? ' checked' : '') + '> ' + esc(op) + '</label>';
+      }).join('');
+    }
+    if (qd.type === 'checkbox') {
+      var arr = Array.isArray(v) ? v : [];
+      var h = qd.selectAll ? '<button class="selall" data-selall="' + id + '">' + esc(qd.selectAll) + '</button>' : '';
+      return h + qd.options.map(function (op) {
+        return '<label class="opt"><input type="checkbox" data-q="' + id + '" value="' + esc(op) + '"' + (arr.indexOf(op) >= 0 ? ' checked' : '') + '> ' + esc(op) + '</label>';
+      }).join('');
+    }
+    return '';
+  }
+
+  function questionHtml(id) {
+    var qd = LOCQ.Q[id];
+    var cls = 'q' + (qd.subOf ? ' sub' : '') + (qd.safety && getAnswer(id) && getAnswer(id).indexOf('(0)') < 0 ? ' danger' : '');
+    var h = '<div class="' + cls + '" id="qbox' + id + '"><div class="qt">' + esc(qd.question) + '</div>';
+    if (qd.description) { h += '<div class="qd">' + esc(qd.description) + '</div>'; }
+    h += '<div class="qi">' + inputHtml(qd) + '</div></div>';
+    return h;
+  }
+
+  function toggleHtml(key) {
+    var t = LOCQ.TOGGLES[key], open = S.toggles[key];
+    var h = '<div class="tg' + (open ? ' open' : '') + '">';
+    h += '<button class="tgbtn" data-toggle="' + key + '">' + (open ? '&#9660; ' : '&#9658; ') + esc(t.label) +
+      ' <span class="tgn">(' + t.ids.length + ' items, optional)</span></button>';
+    if (open) { h += '<div class="tgbody">' + t.ids.map(questionHtml).join('') + '</div>'; }
+    return h + '</div>';
+  }
+
+  function renderAll() {
+    if (typeof document === 'undefined') { return; }
+    /* header */
+    var bmi = bmiValue();
+    el('hdr-demo').innerHTML = esc(S.prefill.name) + ' &middot; ' + (S.prefill.age != null ? S.prefill.age + 'y' : '?') +
+      ' ' + esc(S.prefill.sex || '') + ' &middot; ' + esc(S.prefill.ethnicity || '') +
+      ' &middot; BMI ' + (bmi ? bmi.toFixed(1) : '-');
+    /* rail + sections */
+    var rail = '', main = '';
+    LOCQ.SECTIONS.forEach(function (sec, i) {
+      var tgs = sec.toggles || (sec.toggle ? [sec.toggle] : []);
+      rail += '<a href="#sec' + i + '" class="rl">' + esc(sec.name) + '</a>';
+      main += '<div class="sec" id="sec' + i + '"><h2>' + esc(sec.name) + '</h2>';
+      (sec.items || []).forEach(function (id) {
+        var qd = LOCQ.Q[id];
+        if (qd.subOf) {
+          var parent = getAnswer(qd.subOf);
+          if (qd.subOf === 200 && parent !== 'Partial - itemize below') { return; }
+        }
+        main += questionHtml(id);
+      });
+      tgs.forEach(function (k) { main += toggleHtml(k); });
+      main += '</div>';
+    });
+    el('rail').innerHTML = rail;
+    el('main').innerHTML = main;
+    /* progress + scores + hints + safety */
+    var p = progress();
+    el('prog').textContent = p.answered + ' / ' + p.total + ' answered';
+    el('scores').innerHTML = activeScores().map(function (s) {
+      return '<span class="chip sev-' + s.severity + '" title="' + esc(s.interpretation) + '">' +
+        esc(s.abbrev) + ' ' + esc(E.formatScoreValue(s)) + '</span>';
+    }).join('');
+    el('safety').style.display = safetyFlag() ? 'block' : 'none';
+    el('hints').innerHTML = gatewayHints().map(function (h, i) {
+      return '<button class="hint" data-hint="' + i + '">' + esc(h.msg) + '</button>';
+    }).join('');
+    wire();
+  }
+
+  function wire() {
+    document.querySelectorAll('[data-q]').forEach(function (n) {
+      n.onchange = function () {
+        var id = +n.getAttribute('data-q'), qd = LOCQ.Q[id];
+        if (qd.type === 'checkbox') {
+          var vals = [];
+          document.querySelectorAll('[data-q="' + id + '"]:checked').forEach(function (c) { vals.push(c.value); });
+          setAnswer(id, vals);
+        } else if (qd.type === 'number') { setAnswer(id, n.value === '' ? null : +n.value); }
+        else { setAnswer(id, n.value); }
+        renderAll();
+      };
+    });
+    document.querySelectorAll('[data-selall]').forEach(function (n) {
+      n.onclick = function () { var id = +n.getAttribute('data-selall'); setAnswer(id, LOCQ.Q[id].options.slice()); renderAll(); };
+    });
+    document.querySelectorAll('[data-toggle]').forEach(function (n) {
+      n.onclick = function () { var k = n.getAttribute('data-toggle'); S.toggles[k] = !S.toggles[k]; renderAll(); };
+    });
+    document.querySelectorAll('[data-hint]').forEach(function (n) {
+      n.onclick = function () {
+        gatewayHints()[+n.getAttribute('data-hint')].open.forEach(function (k) { S.toggles[k] = true; });
+        renderAll();
+      };
+    });
+    document.querySelectorAll('[data-anthro]').forEach(function (n) {
+      n.onchange = function () { S.anthro[n.getAttribute('data-anthro')] = n.value === '' ? null : +n.value; renderAll(); };
+    });
+    var ev = el('btn-eval');
+    if (ev) {
+      ev.onclick = function () {
+        var d = evaluate();
+        el('diag').innerHTML = !d ? '<em>Need height + weight (or BMI) first.</em>' :
+          '<b>' + esc(d.classification) + '</b> (' + esc(d.confidence) + ' confidence)<br>' + esc(d.reasoning) +
+          (d.affectedSystems.length ? '<br>Systems: ' + esc(d.affectedSystems.join(', ')) : '') +
+          '<ul>' + d.recommendations.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>';
+      };
+    }
+    var ex = el('btn-export');
+    if (ex) { ex.onclick = function () { el('diag').textContent = exportJSON(); }; }
+  }
+
+  function boot(prefill) {
+    if (prefill) { S.prefill = prefill.demo || S.prefill; S.anthro = prefill.anthro || S.anthro; if (prefill.answers) { Object.keys(prefill.answers).forEach(function (k) { setAnswer(+k, prefill.answers[k]); }); } }
+    renderAll();
+  }
+
+  return { S: S, setAnswer: setAnswer, getAnswer: getAnswer, respArray: respArray, bmiValue: bmiValue,
+    buildPatientData: buildPatientData, visibleIds: visibleIds, progress: progress,
+    gatewayHints: gatewayHints, activeScores: activeScores, safetyFlag: safetyFlag,
+    evaluate: evaluate, exportJSON: exportJSON, boot: boot, renderAll: renderAll };
+})();
+if (typeof module !== 'undefined') { module.exports = LOCAPP; }
+</script>
+<script>
+LOCAPP.boot({
+ demo:{age:52,sex:'Female',ethnicity:'Caucasian',name:'Demo, Dana'},
+ anthro:{ft:5,inch:5,wt:232,waist:41}
+});
+document.querySelectorAll('[data-anthro]').forEach(function(n){var k=n.getAttribute('data-anthro');if(LOCAPP.S.anthro[k]!=null){n.value=LOCAPP.S.anthro[k];}});
+</script>
+</body></html>

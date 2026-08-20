@@ -1,0 +1,275 @@
+/* LOC-FM app.js v1.2 (FileMaker save bridge + draft resume) - session-1 skeleton: state + render + toggles + gateways + live scores */
+var LOCAPP = (function () {
+  var E = (typeof LOCENGINE !== 'undefined') ? LOCENGINE : null;
+  var S = {
+    responses: {},                  /* id -> string | string[] | number */
+    toggles: { hvs: false, phq9: false, gad7: false, scoff: false, sb: false, ess: false },
+    prefill: { age: null, sex: null, ethnicity: null, name: '' },  /* from FM in session 2 */
+    anthro: { ft: null, inch: null, wt: null, waist: null }
+  };
+
+  /* ---------- pure state helpers (node-testable) ---------- */
+  function setAnswer(id, v) { if (v === '' || v == null || (Array.isArray(v) && !v.length)) { delete S.responses[id]; } else { S.responses[id] = v; } }
+  function getAnswer(id) { return (id in S.responses) ? S.responses[id] : null; }
+  function respArray() {
+    var out = [];
+    Object.keys(S.responses).forEach(function (k) { out.push({ questionId: +k, answer: S.responses[k] }); });
+    /* virtual demographic responses for STOP-BANG auto items */
+    if (S.prefill.age != null) { out.push({ questionId: 1, answer: S.prefill.age }); }
+    if (S.prefill.sex) { out.push({ questionId: 2, answer: S.prefill.sex }); }
+    return out;
+  }
+  function bmiInput() {
+    return { height: null, weight: S.anthro.wt, heightInFeet: S.anthro.ft, heightInInches: S.anthro.inch, useFeetInches: true };
+  }
+  function bmiValue() { return E ? E.computeBmi(bmiInput()) : null; }
+  function has(id, opt) { var v = getAnswer(id); return Array.isArray(v) && v.indexOf(opt) >= 0; }
+  function buildPatientData() {
+    var heightIn = (S.anthro.ft || 0) * 12 + (S.anthro.inch || 0);
+    return {
+      anthropometrics: {
+        height: heightIn || undefined, weight: S.anthro.wt || undefined,
+        waistCircumference: S.anthro.waist || undefined,
+        age: S.prefill.age || undefined,
+        sex: S.prefill.sex ? S.prefill.sex.toLowerCase() : undefined,
+        ethnicity: S.prefill.ethnicity || undefined
+      },
+      clinical: {
+        breathlessness: has(55, 'Breathlessness/Dyspnea') || undefined,
+        fatigue: has(55, 'Chronic Fatigue') || undefined,
+        chronicPain: has(56, 'Chronic Pain') || undefined,
+        urinaryIncontinence: has(56, 'Urinary Incontinence') || undefined,
+        reflux: has(56, 'Gastroesophageal Reflux (GERD)') || undefined,
+        type2Diabetes: has(58, 'Type 2 Diabetes') || undefined,
+        pcos: has(58, 'Polycystic Ovary Syndrome (PCOS)') || undefined,
+        hypertension: has(59, 'Hypertension') || undefined,
+        cardiovascularDisease: has(59, 'Cardiovascular Disease') || undefined,
+        sleepApnea: has(60, 'Sleep Apnea') || undefined,
+        nafld: has(60, 'NAFLD/NASH') || undefined,
+        osteoarthritis: has(60, 'Osteoarthritis') || undefined
+      },
+      functional: {
+        mobilityLimitations: has(54, 'Mobility Limitations') || undefined,
+        bathingDifficulty: has(54, 'Bathing Difficulty') || undefined,
+        dressingDifficulty: has(54, 'Dressing Difficulty') || undefined,
+        toiletingDifficulty: has(54, 'Toileting Difficulty') || undefined,
+        continenceDifficulty: has(54, 'Continence Issues') || undefined,
+        eatingDifficulty: has(54, 'Eating Difficulty') || undefined
+      },
+      laboratory: {}
+    };
+  }
+  function visibleIds() {
+    var ids = [];
+    LOCQ.SECTIONS.forEach(function (sec) {
+      (sec.items || []).forEach(function (id) {
+        var qd = LOCQ.Q[id];
+        if (qd.subOf) {
+          var parent = getAnswer(qd.subOf);
+          if (qd.subOf === 200) { if (parent !== 'Partial - itemize below') { return; } }
+          else if (parent == null) { return; }
+        }
+        ids.push(id);
+      });
+      var tgs = sec.toggles || (sec.toggle ? [sec.toggle] : []);
+      tgs.forEach(function (t) { if (S.toggles[t]) { ids = ids.concat(LOCQ.TOGGLES[t].ids); } });
+    });
+    return ids;
+  }
+  function progress() {
+    var ids = visibleIds();
+    var answered = ids.filter(function (id) { return getAnswer(id) != null; }).length;
+    return { answered: answered, total: ids.length };
+  }
+  function gatewayHints() {
+    var h = [];
+    if (getAnswer(31) && !(S.toggles.sb || S.toggles.ess)) { h.push({ from: 31, msg: 'Sleep concern noted - consider opening STOP-BANG / Epworth', open: ['sb'] }); }
+    if (getAnswer(32) && !(S.toggles.phq9 || S.toggles.gad7)) { h.push({ from: 32, msg: 'Mood/stress noted - consider opening PHQ-9 / GAD-7', open: ['phq9'] }); }
+    if (E && S.toggles.sb && !S.toggles.ess) {
+      var sb = E.scoreStopBang(respArray(), bmiInput());
+      if (sb.score != null && sb.score >= 3) { h.push({ from: 99, msg: 'STOP-BANG ' + sb.score + ' - consider Epworth to quantify sleepiness', open: ['ess'] }); }
+    }
+    return h;
+  }
+  function activeScores() {
+    if (!E) { return []; }
+    var r = respArray(), out = [];
+    if (S.toggles.phq9) { out.push(E.scorePhq9(r)); }
+    if (S.toggles.gad7) { out.push(E.scoreGad7(r)); }
+    if (S.toggles.scoff) { out.push(E.scoreScoff(r)); }
+    if (S.toggles.sb) { out.push(E.scoreStopBang(r, bmiInput())); }
+    if (S.toggles.ess) { out.push(E.scoreEpworth(r)); }
+    if (S.toggles.hvs) { out.push(E.scoreHungerVs(r)); }
+    out.push(E.scorePavs(r));
+    return out;
+  }
+  function safetyFlag() { return E ? E.phq9SafetyFlagActive(respArray()) : false; }
+  function evaluate() { return E ? E.DiagnosticEngine.evaluate(buildPatientData()) : null; }
+  function exportJSON() {
+    return JSON.stringify({
+      version: 1, savedAt: new Date().toISOString(),
+      prefill: S.prefill, anthro: S.anthro, toggles: S.toggles,
+      responses: S.responses,
+      scores: activeScores(), diagnostic: evaluate()
+    });
+  }
+
+  /* ---------- DOM render (browser only) ---------- */
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function el(id) { return (typeof document === 'undefined') ? null : document.getElementById(id); }
+
+  function inputHtml(qd) {
+    var v = getAnswer(qd.id), id = qd.id;
+    if (qd.type === 'textarea') { return '<textarea data-q="' + id + '" rows="3">' + esc(v || '') + '</textarea>'; }
+    if (qd.type === 'text') { return '<input type="text" data-q="' + id + '" value="' + esc(v || '') + '">'; }
+    if (qd.type === 'number') { return '<input type="number" data-q="' + id + '" value="' + esc(v == null ? '' : v) + '">'; }
+    if (qd.type === 'dropdown') {
+      var o = '<option value=""></option>';
+      qd.options.forEach(function (op) { o += '<option' + (v === op ? ' selected' : '') + '>' + esc(op) + '</option>'; });
+      return '<select data-q="' + id + '">' + o + '</select>';
+    }
+    if (qd.type === 'radio' || qd.type === 'macro') {
+      return qd.options.map(function (op) {
+        return '<label class="opt"><input type="radio" name="q' + id + '" data-q="' + id + '" value="' + esc(op) + '"' + (v === op ? ' checked' : '') + '> ' + esc(op) + '</label>';
+      }).join('');
+    }
+    if (qd.type === 'checkbox') {
+      var arr = Array.isArray(v) ? v : [];
+      var h = qd.selectAll ? '<button class="selall" data-selall="' + id + '">' + esc(qd.selectAll) + '</button>' : '';
+      return h + qd.options.map(function (op) {
+        return '<label class="opt"><input type="checkbox" data-q="' + id + '" value="' + esc(op) + '"' + (arr.indexOf(op) >= 0 ? ' checked' : '') + '> ' + esc(op) + '</label>';
+      }).join('');
+    }
+    return '';
+  }
+
+  function questionHtml(id) {
+    var qd = LOCQ.Q[id];
+    var cls = 'q' + (qd.subOf ? ' sub' : '') + (qd.safety && getAnswer(id) && getAnswer(id).indexOf('(0)') < 0 ? ' danger' : '');
+    var h = '<div class="' + cls + '" id="qbox' + id + '"><div class="qt">' + esc(qd.question) + '</div>';
+    if (qd.description) { h += '<div class="qd">' + esc(qd.description) + '</div>'; }
+    h += '<div class="qi">' + inputHtml(qd) + '</div></div>';
+    return h;
+  }
+
+  function toggleHtml(key) {
+    var t = LOCQ.TOGGLES[key], open = S.toggles[key];
+    var h = '<div class="tg' + (open ? ' open' : '') + '">';
+    h += '<button class="tgbtn" data-toggle="' + key + '">' + (open ? '&#9660; ' : '&#9658; ') + esc(t.label) +
+      ' <span class="tgn">(' + t.ids.length + ' items, optional)</span></button>';
+    if (open) { h += '<div class="tgbody">' + t.ids.map(questionHtml).join('') + '</div>'; }
+    return h + '</div>';
+  }
+
+  function renderAll() {
+    if (typeof document === 'undefined') { return; }
+    /* header */
+    var bmi = bmiValue();
+    el('hdr-demo').innerHTML = esc(S.prefill.name) + ' &middot; ' + (S.prefill.age != null ? S.prefill.age + 'y' : '?') +
+      ' ' + esc(S.prefill.sex || '') + ' &middot; ' + esc(S.prefill.ethnicity || '') +
+      ' &middot; BMI ' + (bmi ? bmi.toFixed(1) : '-');
+    /* rail + sections */
+    var rail = '', main = '';
+    LOCQ.SECTIONS.forEach(function (sec, i) {
+      var tgs = sec.toggles || (sec.toggle ? [sec.toggle] : []);
+      rail += '<a href="#sec' + i + '" class="rl">' + esc(sec.name) + '</a>';
+      main += '<div class="sec" id="sec' + i + '"><h2>' + esc(sec.name) + '</h2>';
+      (sec.items || []).forEach(function (id) {
+        var qd = LOCQ.Q[id];
+        if (qd.subOf) {
+          var parent = getAnswer(qd.subOf);
+          if (qd.subOf === 200 && parent !== 'Partial - itemize below') { return; }
+        }
+        main += questionHtml(id);
+      });
+      tgs.forEach(function (k) { main += toggleHtml(k); });
+      main += '</div>';
+    });
+    el('rail').innerHTML = rail;
+    el('main').innerHTML = main;
+    /* progress + scores + hints + safety */
+    var p = progress();
+    el('prog').textContent = p.answered + ' / ' + p.total + ' answered';
+    el('scores').innerHTML = activeScores().map(function (s) {
+      return '<span class="chip sev-' + s.severity + '" title="' + esc(s.interpretation) + '">' +
+        esc(s.abbrev) + ' ' + esc(E.formatScoreValue(s)) + '</span>';
+    }).join('');
+    el('safety').style.display = safetyFlag() ? 'block' : 'none';
+    el('hints').innerHTML = gatewayHints().map(function (h, i) {
+      return '<button class="hint" data-hint="' + i + '">' + esc(h.msg) + '</button>';
+    }).join('');
+    wire();
+  }
+
+  function wire() {
+    document.querySelectorAll('[data-q]').forEach(function (n) {
+      n.onchange = function () {
+        var id = +n.getAttribute('data-q'), qd = LOCQ.Q[id];
+        if (qd.type === 'checkbox') {
+          var vals = [];
+          document.querySelectorAll('[data-q="' + id + '"]:checked').forEach(function (c) { vals.push(c.value); });
+          setAnswer(id, vals);
+        } else if (qd.type === 'number') { setAnswer(id, n.value === '' ? null : +n.value); }
+        else { setAnswer(id, n.value); }
+        renderAll();
+      };
+    });
+    document.querySelectorAll('[data-selall]').forEach(function (n) {
+      n.onclick = function () { var id = +n.getAttribute('data-selall'); setAnswer(id, LOCQ.Q[id].options.slice()); renderAll(); };
+    });
+    document.querySelectorAll('[data-toggle]').forEach(function (n) {
+      n.onclick = function () { var k = n.getAttribute('data-toggle'); S.toggles[k] = !S.toggles[k]; renderAll(); };
+    });
+    document.querySelectorAll('[data-hint]').forEach(function (n) {
+      n.onclick = function () {
+        gatewayHints()[+n.getAttribute('data-hint')].open.forEach(function (k) { S.toggles[k] = true; });
+        renderAll();
+      };
+    });
+    document.querySelectorAll('[data-anthro]').forEach(function (n) {
+      n.onchange = function () { S.anthro[n.getAttribute('data-anthro')] = n.value === '' ? null : +n.value; renderAll(); };
+    });
+    var ev = el('btn-eval');
+    if (ev) {
+      ev.onclick = function () {
+        var d = evaluate();
+        el('diag').innerHTML = !d ? '<em>Need height + weight (or BMI) first.</em>' :
+          '<b>' + esc(d.classification) + '</b> (' + esc(d.confidence) + ' confidence)<br>' + esc(d.reasoning) +
+          (d.affectedSystems.length ? '<br>Systems: ' + esc(d.affectedSystems.join(', ')) : '') +
+          '<ul>' + d.recommendations.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>';
+      };
+    }
+    var ex = el('btn-export');
+    if (ex) { ex.onclick = function () { el('diag').textContent = exportJSON(); }; }
+    var sv = el('btn-save');
+    if (sv) { sv.onclick = saveToFileMaker; }
+  }
+
+  function saveToFileMaker() {
+    var json = exportJSON();
+    if (typeof FileMaker !== 'undefined' && FileMaker.PerformScriptWithOption) {
+      FileMaker.PerformScriptWithOption('SaveInterview', json, '0');
+      var b = el('btn-save'); if (b) { b.textContent = 'Saved ' + new Date().toLocaleTimeString(); setTimeout(function () { b.textContent = 'Save to FileMaker'; }, 2500); }
+      return true;
+    }
+    var d = el('diag'); if (d) { d.textContent = json; }
+    return false;
+  }
+  function boot(prefill) {
+    if (prefill) {
+      S.prefill = prefill.demo || S.prefill;
+      S.anthro = prefill.anthro || S.anthro;
+      if (prefill.toggles) { Object.keys(prefill.toggles).forEach(function (k) { if (k in S.toggles) { S.toggles[k] = !!prefill.toggles[k]; } }); }
+      if (prefill.answers) { Object.keys(prefill.answers).forEach(function (k) { setAnswer(+k, prefill.answers[k]); }); }
+    }
+    renderAll();
+  }
+
+  return { S: S, setAnswer: setAnswer, getAnswer: getAnswer, respArray: respArray, bmiValue: bmiValue,
+    buildPatientData: buildPatientData, visibleIds: visibleIds, progress: progress,
+    gatewayHints: gatewayHints, activeScores: activeScores, safetyFlag: safetyFlag,
+    evaluate: evaluate, exportJSON: exportJSON, saveToFileMaker: saveToFileMaker, boot: boot, renderAll: renderAll };
+})();
+if (typeof module !== 'undefined') { module.exports = LOCAPP; }
+
+var LOC_APP_VERSION="1.2";
