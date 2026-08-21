@@ -1,0 +1,17 @@
+Set Error Capture [ On ]
+Set Variable [ $json ; Get ( ScriptParameter ) ]
+Set Variable [ $acct ; JSONGetElement ( $json ; "acct" ) ]
+Set Variable [ $queue ; JSONGetElement ( $json ; "queue" ) ]
+Set Variable [ $home ; Get ( LayoutName ) ]
+Freeze Window
+Go to Layout [ "Obesity Management" (Obesity Management) ]
+Enter Find Mode [ ]
+Set Field [ Obesity Management::AccountNumber ; $acct ]
+Perform Find [ ]
+If [ Get ( FoundCount ) > 0 ]
+Set Field [ Obesity Management::LastOutreach ; Get ( CurrentDate ) ]
+Set Field [ Obesity Management::OutreachLog ; If ( IsEmpty ( Obesity Management::OutreachLog ) ; "" ; Obesity Management::OutreachLog & Char ( 13 ) ) & GetAsText ( Get ( CurrentDate ) ) & " - " & $queue & " outreach" ]
+Commit Records/Requests [ No dialog ]
+End If
+Go to Layout [ $home ]
+Refresh Object [ Object Name: "owviewer" ]
