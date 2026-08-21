@@ -2,11 +2,11 @@
 
 Single-screen return-visit lifecycle for **Obesity Management.fmp12**: carry-forward entry → Save → Doximity prompt → paste AI output → filed note view. Replaces the portal-based visit entry and the old "new portal row" script.
 
-## Deployed versions (source of truth = FileMaker; this folder mirrors the Aug 20, 2026 evening DDR)
+## Deployed versions (source of truth = FileMaker; this folder mirrors the Aug 20, 2026 evening DDR + Aug 21 field export)
 
 | Artifact | Where in FM | Version |
 |---|---|---|
-| `RVApp_source.txt` | Code Library record `RVApp` (Name/Source) | **v1.8** — *pending: not recoverable from DDR (record data), to be added from FileMaker export* |
+| `code-library/RVApp_source.txt` | Code Library record `RVApp` (Name/Source) | v1.8 (exported from FileMaker Aug 21; syntax-checked + node smoke-tested) |
 | `ReturnVisit_Full_calc.txt` | Unstored Text calc on Obesity Management, field `ReturnVisit_Full` | v1.7 |
 | `VisitSummary_calc.txt` | Calc on Visits — Doximity prompt content | (edited Aug 20: PatientReported preferred over PasteIntakeQ) |
 | `scripts/SaveReturnVisit.txt` | Script, 69 steps | find-or-create Visits by acct+date; 21 fields; MDMVisits on new+empty MDM; SECA row; OM::Prescription |
@@ -23,7 +23,7 @@ Script files are DDR step-text exports (human-readable, not importable). To rege
 - Layout **"Return Visit"** (Obesity Management context), web viewer object named **`rvviewer`**, viewer = `"data:text/html;base64," & Base64Encode(ReturnVisit_Full)`; checkboxes: interaction ON, encode OFF, Allow JS to perform FM scripts ON.
 - OnRecordLoad trigger → `RVResetDate`.
 - Globals: `Globals::RVSelectedDate` (global Date).
-- Fields added for this system: `Visits::PatientReported`; `Visits::grip strenth` (misspelling is load-bearing — referenced by SaveReturnVisit).
+- Fields added for this system: `Visits::PatientReported`; `Visits::grip strenth` (misspelling is load-bearing — referenced by SaveReturnVisit; the JS key is `gripStrenth`).
 - Join key everywhere: `AccountNumber`. ExecuteSQL returns ISO dates (YYYY-MM-DD) in this file; JS parses both ISO and M/D/YYYY; FM scripts parse ISO via `If(PatternCount(p;"-")>0; Date(Middle(p;6;2);Middle(p;9;2);Left(p;4)); GetAsDate(p))`.
 
 ## Hard-won rules baked into this code

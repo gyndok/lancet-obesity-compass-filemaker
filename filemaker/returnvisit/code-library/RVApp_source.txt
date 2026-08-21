@@ -1,0 +1,309 @@
+/* RV-FM rv_app.js v1.8 - MDM joins carry-forward */
+var RVAPP = (function () {
+  var AOMS = ['Liraglutide', 'Metformin', 'Naltrexone / Bupropion', 'Orforglipron', 'Orlistat',
+    'Phentermine', 'Phentermine / Topiramate', 'Semaglutide', 'Semaglutide (oral)', 'Setmelanotide',
+    'Tirzepatide', 'Topiramate'];
+  var VF = ['Weightpounds', 'BloodPressureSystolic', 'BloodPressureDiastolic', 'Pulse',
+    'WaistCircumferenceInches', 'NeckCircumferenceInches', 'HipCircumference', 'gripStrenth',
+    'PatientReported', 'DietaryHabits', 'PhysicalActivity', 'BehavioralChanges', 'MedicationReview',
+    'LabResults', 'FastingInsulin', 'FastingGlucose', 'GoalSetting', 'MDM', 'returntoclinic',
+    'ReferringMD', 'includePrompt'];
+  var NUMF = { Weightpounds: 1, BloodPressureSystolic: 1, BloodPressureDiastolic: 1, Pulse: 1,
+    WaistCircumferenceInches: 1, NeckCircumferenceInches: 1, HipCircumference: 1, gripStrenth: 1,
+    FastingInsulin: 1, FastingGlucose: 1 };
+  var SF = ['Weight', 'FatMass', 'PercentBodyFat', 'SkeletalMuscleMass', 'VAT', 'RestingEnergy'];
+  var CTX = { acct: '', name: '', age: null, heightIn: null, startW: null, targetW: null,
+    rx: '', today: '', lastDate: null, lastW: null, lastWaist: null, lastHip: null,
+    lastDays: null, labsDays: null, rtc: '', editing: false,
+    selDate: '', isToday: true, visits: [], aiNote: '', prompt: '' };
+  var S = { v: {}, seca: null, rxSel: '', compounded: false };
+
+  function pd(s) { if (!s) { return null; }
+    var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) { return new Date(+m[1], +m[2] - 1, +m[3]).getTime(); }
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) { return new Date(+m[3], +m[1] - 1, +m[2]).getTime(); }
+    return null; }
+  function num(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
+  function r1(x) { return Math.round(x * 10) / 10; }
+  function r2(x) { return Math.round(x * 100) / 100; }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  /* ---------- live computes (node-testable) ---------- */
+  function bmi() { var w = num(S.v.Weightpounds), h = CTX.heightIn;
+    return (w && h) ? r2(w / (h * h) * 703) : null; }
+  function tbwl() { var w = num(S.v.Weightpounds);
+    return (w && CTX.startW) ? r1((CTX.startW - w) / CTX.startW * 100) : null; }
+  function dW() { var w = num(S.v.Weightpounds);
+    return (w != null && CTX.lastW != null) ? r1(w - CTX.lastW) : null; }
+  function ratePerWk() { var d = dW();
+    if (d == null || !CTX.lastDate) { return null; }
+    var wks = (Date.now() - CTX.lastDate) / 604800000;
+    return (wks >= 1) ? r2(d / wks) : null; }
+  function dWaist() { var w = num(S.v.WaistCircumferenceInches);
+    return (w != null && CTX.lastWaist != null) ? r1(w - CTX.lastWaist) : null; }
+  function homa() { var i = num(S.v.FastingInsulin), g = num(S.v.FastingGlucose);
+    return (i && g) ? r2(i * g / 405) : null; }
+  function bpFlag() { var s = num(S.v.BloodPressureSystolic), d = num(S.v.BloodPressureDiastolic);
+    if (s == null && d == null) { return null; }
+    if ((s != null && s >= 140) || (d != null && d >= 90)) { return 'stage2'; }
+    if ((s != null && s >= 130) || (d != null && d >= 80)) { return 'stage1'; }
+    return 'ok'; }
+  function toGoal() { var w = num(S.v.Weightpounds);
+    return (w && CTX.targetW) ? r1(w - CTX.targetW) : null; }
+  function rxString() { if (!S.rxSel) { return ''; }
+    return S.rxSel + (S.compounded ? ' (compound)' : ''); }
+  function chips() {
+    var out = [], b = bmi(), t = tbwl(), d = dW(), r = ratePerWk(), h = homa(),
+      bp = bpFlag(), dw = dWaist(), g = toGoal();
+    if (b != null) { out.push({ l: 'BMI ' + b, c: b >= 30 ? 'warn' : 'ok' }); }
+    if (d != null) { out.push({ l: (d > 0 ? '+' : '') + d + ' lb since last visit', c: d <= 0 ? 'ok' : 'warn' }); }
+    if (t != null) { out.push({ l: t + '% TBWL', c: t >= 10 ? 'good' : 'ok' }); }
+    if (r != null) { out.push({ l: (r > 0 ? '+' : '') + r + ' lb/wk', c: r <= 0 ? 'ok' : 'warn' }); }
+    if (g != null) { out.push({ l: g + ' lb to goal', c: 'ok' }); }
+    if (dw != null) { out.push({ l: (dw > 0 ? '+' : '') + dw + ' in waist', c: dw <= 0 ? 'ok' : 'warn' }); }
+    if (h != null) { out.push({ l: 'HOMA-IR ' + h, c: h >= 2.5 ? 'warn' : (h >= 2 ? 'mid' : 'ok') }); }
+    if (bp === 'stage1') { out.push({ l: 'BP elevated', c: 'mid' }); }
+    if (bp === 'stage2') { out.push({ l: 'BP stage 2', c: 'warn' }); }
+    return out; }
+  function secaComplete() { if (!S.seca) { return false; }
+    return SF.some(function (k) { return num(S.seca[k]) != null; }); }
+  function payload() {
+    var v = {};
+    VF.forEach(function (k) { var x = S.v[k];
+      if (x == null || x === '') { v[k] = ''; }
+      else { v[k] = NUMF[k] ? num(x) : x; } });
+    return JSON.stringify({ version: 1, savedAt: new Date().toISOString(),
+      acct: CTX.acct, date: (CTX.isToday ? CTX.today : CTX.selDate), editing: CTX.editing,
+      visit: v, rx: rxString(),
+      seca: secaComplete() ? (function () { var o = {};
+        SF.forEach(function (k) { o[k] = num(S.seca[k]); }); return o; })() : null,
+      computed: { bmi: bmi(), tbwl: tbwl(), deltaW: dW(), homa: homa() } }); }
+  function save() {
+    var json = payload();
+    if (typeof FileMaker !== 'undefined' && FileMaker.PerformScriptWithOption) {
+      FileMaker.PerformScriptWithOption('SaveReturnVisit', json, '0');
+      S.showForm = false;
+      var b = el('btn-save');
+      if (b) { b.textContent = 'Saved ' + new Date().toLocaleTimeString(); }
+      return true; }
+    var d = el('out'); if (d) { d.textContent = json; }
+    return false; }
+
+  /* ---------- DOM ---------- */
+  function el(id) { return (typeof document === 'undefined') ? null : document.getElementById(id); }
+  function fld(k, label, kind, extra) {
+    var v = S.v[k] == null ? '' : S.v[k];
+    var h = '<div class="q"><div class="qt">' + esc(label) + '</div>';
+    if (extra) { h += '<div class="qd">' + esc(extra) + '</div>'; }
+    h += '<div class="qi">';
+    if (kind === 'ta') { h += '<textarea data-v="' + k + '" rows="3">' + esc(v) + '</textarea>'; }
+    else if (kind === 'n') { h += '<input type="number" step="any" data-v="' + k + '" value="' + esc(v) + '">'; }
+    else { h += '<input type="text" data-v="' + k + '" value="' + esc(v) + '">'; }
+    return h + '</div></div>'; }
+  function pair(k1, l1, k2, l2, k3, l3) {
+    var h = '<div class="row3">';
+    [[k1, l1], [k2, l2], [k3, l3]].forEach(function (p) {
+      if (!p[0]) { return; }
+      h += '<div class="cell"><div class="qt">' + esc(p[1]) + '</div>' +
+        '<input type="number" step="any" data-v="' + p[0] + '" value="' + esc(S.v[p[0]] == null ? '' : S.v[p[0]]) + '"></div>'; });
+    return h + '</div>'; }
+  function updateChips() {
+    var c = el('chips');
+    if (c) { c.innerHTML = chips().map(function (x) {
+      return '<span class="chip ' + x.c + '">' + esc(x.l) + '</span>'; }).join(''); }
+    var rp = el('rxprev'); if (rp) { rp.textContent = rxString() || '-'; }
+  }
+  function copyText(btnId, text) {
+    var b = el(btnId); if (!b) { return; }
+    b.onclick = function () {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      b.textContent = 'Copied'; };
+  }
+  function saveAI() {
+    var ta = el('ai-paste'); if (!ta || !ta.value.replace(/\s/g, '')) { return false; }
+    var json = JSON.stringify({ acct: CTX.acct, date: (CTX.isToday ? CTX.today : CTX.selDate), text: ta.value });
+    if (typeof FileMaker !== 'undefined' && FileMaker.PerformScriptWithOption) {
+      FileMaker.PerformScriptWithOption('SaveAIPaste', json, '0');
+      return true; }
+    var d = el('out'); if (d) { d.textContent = json; }
+    return false;
+  }
+  function navTo(d) {
+    if (typeof FileMaker !== 'undefined' && FileMaker.PerformScriptWithOption) {
+      FileMaker.PerformScriptWithOption('LoadVisit', d, '0');
+    }
+  }
+  function renderRail() {
+    var r = el('rail'); if (!r) { return; }
+    var h = '<div class="rl' + (CTX.isToday ? ' on' : '') + '" data-nav="TODAY">+ Today' +
+      (CTX.isToday && CTX.editing ? ' (saved)' : '') + '</div>';
+    CTX.visits.forEach(function (v) {
+      var on = (!CTX.isToday && v.d === CTX.selDate);
+      h += '<div class="rl' + (on ? ' on' : '') + '" data-nav="' + esc(v.d) + '">' + esc(v.d) +
+        (v.w ? ' <span class="rw">' + v.w + '</span>' : '') + '</div>'; });
+    r.innerHTML = h;
+    document.querySelectorAll('[data-nav]').forEach(function (n) {
+      n.onclick = function () { navTo(n.getAttribute('data-nav')); }; });
+  }
+  function renderAll() {
+    if (typeof document === 'undefined') { return; }
+    renderRail();
+    el('hdr-demo').innerHTML = esc(CTX.name) + ' &middot; ' + (CTX.age != null ? CTX.age + 'y' : '') +
+      ' &middot; ' + esc(CTX.rx || 'no AOM on file') +
+      (CTX.editing && CTX.isToday ? ' &middot; <span class=edit>editing today\'s visit</span>' : '') +
+      (!CTX.isToday ? ' &middot; <span class=edit>viewing visit of ' + esc(CTX.selDate) + '</span>' : '');
+    if (!CTX.isToday) {
+      el('chips').innerHTML = '';
+      var sv0 = el('btn-save'); if (sv0) { sv0.style.display = 'none'; }
+      el('main').innerHTML = '<div class="sec"><h2>AI note - ' + esc(CTX.selDate) + '</h2>' +
+        (CTX.aiNote ?
+          '<div class="q"><button class="selall" id="btn-copy">Copy note</button>' +
+          '<div class="note" id="notebody">' + esc(CTX.aiNote) + '</div></div>' :
+          '<div class="q"><div class="qd">No AI note stored for this visit.</div></div>') +
+        '</div>';
+      var cb = el('btn-copy');
+      if (cb) { cb.onclick = function () {
+        var ta = document.createElement('textarea');
+        ta.value = CTX.aiNote; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        cb.textContent = 'Copied'; }; }
+      return;
+    }
+    var svT = el('btn-save'); if (svT) { svT.style.display = ''; }
+    el('hdr-ctx').innerHTML =
+      (CTX.startW ? 'Start ' + CTX.startW + ' lb' : '') +
+      (CTX.lastW != null ? ' &middot; Last visit ' + CTX.lastW + ' lb' +
+        (CTX.lastDays != null ? ' (' + CTX.lastDays + 'd ago)' : '') : ' &middot; no prior visit') +
+      (CTX.targetW ? ' &middot; Target ' + CTX.targetW + ' lb' : '') +
+      (CTX.labsDays != null ? ' &middot; Labs ' + CTX.labsDays + 'd old' : ' &middot; no labs on file') +
+      (CTX.rtc ? ' &middot; Was told: return ' + esc(CTX.rtc) : '');
+    el('chips').innerHTML = chips().map(function (c) {
+      return '<span class="chip ' + c.c + '">' + esc(c.l) + '</span>'; }).join('');
+    if (S.showForm === undefined) { S.showForm = !CTX.editing; }
+    var svW = el('btn-save'); if (svW) { svW.style.display = S.showForm ? '' : 'none'; }
+    if (CTX.editing && !S.showForm) {
+      var wf = '<div class="tg"><button class="tgbtn" id="tg-form">&#9658; Visit entry (saved) - reopen to edit</button></div>';
+      wf += '<div class="sec"><h2>Doximity prompt</h2><div class="q">' +
+        (CTX.prompt ? '<button class="selall" id="btn-copyprompt">Copy prompt</button>' +
+          '<div class="note" style="max-height:260px;overflow-y:auto">' + esc(CTX.prompt) + '</div>' :
+          '<div class="qd">Prompt not available (includePrompt off or summary empty).</div>') + '</div></div>';
+      if (CTX.aiNote) {
+        wf += '<div class="sec"><h2>AI note</h2><div class="q">' +
+          '<button class="selall" id="btn-copynote">Copy note</button>' +
+          '<div class="note">' + esc(CTX.aiNote) + '</div></div></div>';
+      } else {
+        wf += '<div class="sec"><h2>Paste Doximity output</h2><div class="q">' +
+          '<div class="qi"><textarea id="ai-paste" rows="8" placeholder="Paste the Doximity response here, then save"></textarea></div>' +
+          '<button class="selall" id="btn-saveai" style="margin-top:8px">Save AI note</button></div></div>';
+      }
+      el('main').innerHTML = wf;
+      var tf = el('tg-form'); if (tf) { tf.onclick = function () { S.showForm = true; renderAll(); }; }
+      copyText('btn-copyprompt', CTX.prompt);
+      copyText('btn-copynote', CTX.aiNote);
+      var sa = el('btn-saveai');
+      if (sa) { sa.onclick = function () { if (saveAI()) { sa.textContent = 'Saving...'; } }; }
+      return;
+    }
+    var m = '';
+    if (CTX.editing && S.showForm) {
+      m += '<div class="tg"><button class="tgbtn" id="tg-form2">&#9660; Back to visit workflow (prompt / AI note)</button></div>';
+    }
+    m += '<div class="sec"><h2>Measurements</h2>';
+    m += pair('Weightpounds', 'Weight (lb)', 'gripStrenth', 'Grip (lb)', null, null);
+    m += pair('BloodPressureSystolic', 'BP systolic', 'BloodPressureDiastolic', 'BP diastolic', 'Pulse', 'Pulse');
+    m += pair('WaistCircumferenceInches', 'Waist (in)', 'NeckCircumferenceInches', 'Neck (in)', 'HipCircumference', 'Hip (in)');
+    m += '</div>';
+    m += '<div class="sec"><h2>Interval History</h2>';
+    m += fld('PatientReported', 'Patient reported', 'ta', 'Adherence, tolerability, symptoms, wins and struggles since last visit');
+    m += fld('DietaryHabits', 'Diet', 'ta');
+    m += fld('PhysicalActivity', 'Physical activity', 'ta');
+    m += fld('BehavioralChanges', 'Behavioral', 'ta');
+    m += fld('MedicationReview', 'Medication review', 'ta');
+    m += fld('LabResults', 'Lab results (paste)', 'ta');
+    m += pair('FastingInsulin', 'Fasting insulin', 'FastingGlucose', 'Fasting glucose', null, null);
+    m += '</div>';
+    m += '<div class="tg' + (S.seca ? ' open' : '') + '"><button class="tgbtn" id="tg-seca">' +
+      (S.seca ? '&#9660; ' : '&#9658; ') + 'Body Composition (SECA)' +
+      ' <span class="tgn">(optional - creates a SECA scan row)</span></button>';
+    if (S.seca) {
+      m += '<div class="tgbody">';
+      m += '<div class="row3">' + [['Weight', 'Scan weight (lb)'], ['FatMass', 'Fat mass (lb)'], ['PercentBodyFat', '% body fat']].map(function (p) {
+        return '<div class="cell"><div class="qt">' + p[1] + '</div><input type="number" step="any" data-s="' + p[0] + '" value="' + esc(S.seca[p[0]] == null ? '' : S.seca[p[0]]) + '"></div>'; }).join('') + '</div>';
+      m += '<div class="row3">' + [['SkeletalMuscleMass', 'SMM (lb)'], ['VAT', 'VAT (L)'], ['RestingEnergy', 'Resting kcal']].map(function (p) {
+        return '<div class="cell"><div class="qt">' + p[1] + '</div><input type="number" step="any" data-s="' + p[0] + '" value="' + esc(S.seca[p[0]] == null ? '' : S.seca[p[0]]) + '"></div>'; }).join('') + '</div>';
+      m += '</div>'; }
+    m += '</div>';
+    m += '<div class="sec"><h2>Plan</h2>';
+    m += fld('GoalSetting', 'Goal setting', 'ta');
+    m += fld('MDM', 'Assessment and plan (MDM)', 'ta');
+    m += '<div class="q"><div class="qt">AOM prescription</div><div class="qi">' +
+      AOMS.map(function (a) {
+        return '<label class="opt"><input type="radio" name="rx" data-rx="' + esc(a) + '"' + (S.rxSel === a ? ' checked' : '') + '> ' + esc(a) + '</label>'; }).join('') +
+      '<label class="opt cmp"><input type="checkbox" id="cmp"' + (S.compounded ? ' checked' : '') + '> Compounded</label>' +
+      '<div class="qd">Writes to patient Prescription as: <b id="rxprev">' + esc(rxString() || '-') + '</b></div></div></div>';
+    m += fld('returntoclinic', 'Return to clinic', 't', 'e.g. 4 weeks - feeds PanelDash outreach');
+    m += fld('ReferringMD', 'Referring MD (WSOC referral letter)', 't');
+    m += '<div class="q"><div class="qt">Include prompt</div><div class="qi">' +
+      ['Yes', 'No'].map(function (o) {
+        return '<label class="opt"><input type="radio" name="ip" data-ip="' + o + '"' + (S.v.includePrompt === o ? ' checked' : '') + '> ' + o + '</label>'; }).join('') + '</div></div>';
+    m += '</div>';
+    el('main').innerHTML = m;
+    wire();
+  }
+  function wire() {
+    document.querySelectorAll('[data-v]').forEach(function (n) {
+      n.oninput = function () { S.v[n.getAttribute('data-v')] = n.value; updateChips(); }; });
+    document.querySelectorAll('[data-s]').forEach(function (n) {
+      n.oninput = function () { S.seca[n.getAttribute('data-s')] = n.value; }; });
+    document.querySelectorAll('[data-rx]').forEach(function (n) {
+      n.onchange = function () { S.rxSel = n.getAttribute('data-rx'); renderAll(); }; });
+    var c = el('cmp'); if (c) { c.onchange = function () { S.compounded = c.checked; renderAll(); }; }
+    document.querySelectorAll('[data-ip]').forEach(function (n) {
+      n.onchange = function () { S.v.includePrompt = n.getAttribute('data-ip'); renderAll(); }; });
+    var t = el('tg-seca'); if (t) { t.onclick = function () { S.seca = S.seca ? null : {}; renderAll(); }; }
+    var tf2 = el('tg-form2'); if (tf2) { tf2.onclick = function () { S.showForm = false; renderAll(); }; }
+    var sv = el('btn-save'); if (sv) { sv.onclick = save; }
+  }
+  var POSNUM = { age: 1, heightIn: 1, startW: 1, targetW: 1, lastW: 1, lastWaist: 1, lastHip: 1 };
+  function boot(fb) {
+    if (fb) {
+      Object.keys(CTX).forEach(function (k) {
+        if (fb[k] === undefined) { return; }
+        if (POSNUM[k]) { var nv = parseFloat(fb[k]); CTX[k] = (isNaN(nv) || nv <= 0) ? null : nv; }
+        else if (k === 'labsDays') { var lv = parseFloat(fb[k]); CTX[k] = isNaN(lv) ? null : lv; }
+        else { CTX[k] = fb[k]; } });
+      if (fb.lastDateStr) { CTX.lastDate = pd(fb.lastDateStr); }
+      if (CTX.lastDate) { CTX.lastDays = Math.floor((Date.now() - CTX.lastDate) / 86400000); }
+      CTX.selDate = fb.selDate || CTX.today;
+      CTX.isToday = (fb.isToday === undefined) ? true : !!fb.isToday;
+      if (fb.visitList) {
+        CTX.visits = fb.visitList.split(/[\r\n]+/).filter(function (x) { return x; }).map(function (r) {
+          var p = r.split('|'); return { d: p[0], w: p[1] || '' }; }); }
+      CTX.aiNote = fb.aiNote || '';
+      CTX.prompt = fb.prompt || '';
+      if (!fb.edit && fb.carry) {
+        ['MedicationReview', 'ReferringMD', 'LabResults', 'MDM'].forEach(function (k) {
+          if (fb.carry[k]) { S.v[k] = fb.carry[k]; } }); }
+      if (fb.edit) { CTX.editing = true;
+        VF.forEach(function (k) {
+          var ev = fb.edit[k];
+          if (ev === undefined || ev === '') { return; }
+          if (NUMF[k] && !(parseFloat(ev) > 0)) { return; }
+          S.v[k] = ev; }); }
+      if (fb.rx) { var rl = fb.rx.toLowerCase();
+        AOMS.forEach(function (a) { if (rl.indexOf(a.toLowerCase()) === 0) { S.rxSel = a; } });
+        if (rl.indexOf('compound') >= 0) { S.compounded = true; } }
+      if (!S.v.includePrompt) { S.v.includePrompt = 'Yes'; }
+    }
+    renderAll();
+  }
+  return { S: S, CTX: CTX, bmi: bmi, tbwl: tbwl, dW: dW, ratePerWk: ratePerWk, dWaist: dWaist,
+    homa: homa, bpFlag: bpFlag, toGoal: toGoal, rxString: rxString, chips: chips,
+    secaComplete: secaComplete, payload: payload, save: save, boot: boot, renderAll: renderAll, updateChips: updateChips, navTo: navTo, pd: pd };
+})();
+if (typeof module !== 'undefined') { module.exports = RVAPP; }
+
+var RV_APP_VERSION="1.8";
