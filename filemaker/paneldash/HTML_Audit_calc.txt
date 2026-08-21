@@ -1,0 +1,336 @@
+/*
+  WEIGHT-LOSS OUTCOMES -- WEB VIEWER CALCULATION (v2)
+  For the Obesity Management database. The flagship: real-world
+  weight-loss outcomes from 1,096 traceable patients, split by
+  Clinic (in-person WSOC) vs Mochi (telemedicine).
+
+  METHOD
+  - Each patient's baseline = their earliest real weigh-in (blank-
+    weight placeholder rows are ignored -- they were spacer hacks for
+    the old native graph).
+  - For every later weigh-in, percent change = (w - baseline)/baseline
+    * 100 (negative = loss).
+  - Patients binned to Clinic vs Mochi via the Obesity Management
+    "Clinic" field (WSOC -> Clinic; Mochi -> Mochi; blank -> Untagged,
+    pooled into "All" only).
+
+  CHARTS
+  1. MEAN %-CHANGE BY MONTH SINCE BASELINE (to month 18): three lines,
+     All / Mochi / Clinic. The canonical GLP-1 curve -- magnitude,
+     speed, plateau. Each point shows patients-still-contributing (n
+     shrinks over time as patients are followed different lengths).
+  2. RESPONDER RATES: among patients with >=90 days follow-up, the
+     share reaching >=5 / >=10 / >=15 / >=20% loss at their best
+     recorded weigh-in -- grouped bars All/Mochi/Clinic.
+  3. DISTRIBUTION of best %-loss achieved (histogram), all patients
+     with >=90 days follow-up.
+
+  Badges: traceable n, mean best %-loss, % reaching 10%, median weeks
+  of follow-up.
+
+  Only AccountNumber, dates, weights, and the Clinic tag leave
+  FileMaker. No PHI.
+
+  Web viewer: "data:text/html," & <calc>, interaction ON, encode OFF.
+*/
+
+Let ( [
+
+    wRows = ExecuteSQL (
+        "SELECT \"AccountNumber\", \"Date\", \"Weight\" FROM \"WeighIn\"" ;
+        "|" ; "¶"
+    ) ;
+
+    pRows = ExecuteSQL (
+        "SELECT \"AccountNumber\", \"Clinic\" FROM \"Obesity Management\"" ;
+        "|" ; "¶"
+    ) ;
+
+    sqlFailed = ( wRows = "?" ) ;
+    pOK = ( pRows <> "?" ) and not IsEmpty ( pRows ) ;
+
+    wJS = Substitute ( wRows ;
+        [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ ¶ ; "\n" ] ) ;
+    pJS = If ( pOK ;
+        Substitute ( pRows ;
+            [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ ¶ ; "\n" ] ) ;
+        "" ) ;
+
+    fallback = "<!DOCTYPE html><html><body style='font-family:sans-serif;background:#55A4E6;padding:40px;color:#8B1E14;text-align:center'>"
+        & "WeighIn query failed (?). Check table WeighIn and fields AccountNumber, Date, Weight."
+        & "</body></html>" ;
+
+    html = "<!DOCTYPE html><html><head>"
+        & "<script src='https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js'></" & "script>"
+        & "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap' rel='stylesheet'>"
+        & "<style>"
+        & "* { box-sizing: border-box; margin: 0; padding: 0; }"
+        & "body { background: linear-gradient(135deg, #4A9BE0, #6FB3EC); font-family: Inter, sans-serif; padding: 10px; min-height: 100vh; }"
+        & ".card { background: #F6D793; border: 1.5px solid #1B3A5C; border-radius: 12px; box-shadow: 0 4px 20px rgba(15,40,70,0.35); padding: 16px; }"
+        & ".chart-title { font-size: 18px; font-weight: 700; color: #1B3A5C; text-align: center; margin-bottom: 4px; }"
+        & ".chart-subtitle { font-size: 12px; color: #4C6076; text-align: center; margin-bottom: 6px; }"
+        & ".badge-row { display: flex; justify-content: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }"
+        & ".badge { background: #FBE9C0; border: 1px solid rgba(27,58,92,0.35); color: #1B3A5C; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }"
+        & ".badge.blue  { background: #1B3A5C; color: #FBE9C0; border-color: #1B3A5C; }"
+        & ".badge.green { background: #FBE9C0; color: #1a9e5c; border-color: #1a9e5c; }"
+        & ".sect { font-size: 13px; font-weight: 700; color: #1B3A5C; margin: 12px 0 4px 0; }"
+        & ".note { font-size: 10.5px; color: #4C6076; margin-bottom: 6px; }"
+        & ".wrap1 { position: relative; height: 320px; }"
+        & ".wrap2 { position: relative; height: 250px; }"
+        & ".wrap3 { position: relative; height: 240px; }"
+        & "#err { color: #8B1E14; font-size: 11px; text-align: center; margin-top: 8px; white-space: pre-wrap; }"
+        & "</style>"
+        & "<script>"
+        & "window.onerror = function(msg, src, line) {"
+        & "  var e = document.getElementById('err');"
+        & "  if (e) e.textContent = 'JS error: ' + msg + ' (line ' + line + ')';"
+        & "  return false;"
+        & "};"
+        & "</" & "script>"
+        & "</head><body>"
+        & "<div class='card'>"
+        & "<div class='chart-title'>Weight-Loss Outcomes</div>"
+        & "<div class='chart-subtitle' id='subtitle'></div>"
+        & "<div style='text-align:center;margin-bottom:10px'>"
+        & "  <button id='toggle' style=\"font-family:Inter,sans-serif;font-size:12px;font-weight:600;color:#1B3A5C;background:#FBE9C0;border:1px solid #1B3A5C;border-radius:16px;padding:6px 16px;cursor:pointer\">Showing: all patients &mdash; click to show engaged only</button>"
+        & "</div>"
+        & "<div class='badge-row'>"
+        & "  <div class='badge blue'  id='bN'></div>"
+        & "  <div class='badge green' id='bMean'></div>"
+        & "  <div class='badge'       id='b10'></div>"
+        & "  <div class='badge'       id='bFU'></div>"
+        & "</div>"
+        & "<div class='sect'>Mean percent weight change by month since baseline</div>"
+        & "<div class='note'>Baseline = first real weigh-in. Negative = loss. Point tooltip shows how many patients still contribute at that month.</div>"
+        & "<div class='wrap1'><canvas id='c1'></canvas></div>"
+        & "<div class='sect'>Responder rates (best weigh-in, patients with 90+ days follow-up)</div>"
+        & "<div class='wrap2'><canvas id='c2'></canvas></div>"
+        & "<div class='sect'>Distribution of best percent loss achieved</div>"
+        & "<div class='wrap3'><canvas id='c3'></canvas></div>"
+        & "<div id='err'></div>"
+        & "</div>"
+        & "<script>"
+
+        & "const wRaw = '" & wJS & "';"
+        & "const pRaw = '" & pJS & "';"
+
+        & "function parseDate(s) {"
+        & "  s = (s || '').trim(); if (s === '') return null;"
+        & "  let m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);"
+        & "  if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]);"
+        & "  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);"
+        & "  if (m) { let y = +m[3]; if (y < 100) y += (y > 50 ? 1900 : 2000); return Date.UTC(y, +m[1] - 1, +m[2]); }"
+        & "  return null;"
+        & "}"
+
+        & "const cohort = {};"
+        & "pRaw.split('\n').forEach(line => {"
+        & "  const p = line.split('|');"
+        & "  if (p.length < 2 || p[0].trim() === '') return;"
+        & "  const c = (p[1] || '').trim().toLowerCase();"
+        & "  cohort[p[0].trim()] = c.includes('mochi') ? 'Mochi' : (c === '' ? 'Untagged' : 'Clinic');"
+        & "});"
+
+        & "const series = {};"
+        & "wRaw.split('\n').forEach(line => {"
+        & "  const p = line.split('|');"
+        & "  if (p.length < 3) return;"
+        & "  const acct = (p[0] || '').trim(); if (acct === '') return;"
+        & "  const t = parseDate(p[1]); const w = parseFloat(p[2]);"
+        & "  if (t == null || isNaN(w) || w < 70 || w > 800) return;"
+        & "  (series[acct] = series[acct] || []).push({ t: t, w: w });"
+        & "});"
+
+        & "const todayMs = Date.now();"
+        & "const LAPSE_DAYS = 200;"
+        & "const R = {"
+        & "  all:     { month: { All: {}, Mochi: {}, Clinic: {} }, best: { All: [], Mochi: [], Clinic: [] }, trace: 0 },"
+        & "  engaged: { month: { All: {}, Mochi: {}, Clinic: {} }, best: { All: [], Mochi: [], Clinic: [] }, trace: 0 }"
+        & "};"
+        & "function addMonth(store, g, mo, pc) {"
+        & "  const M = (store[g][mo] = store[g][mo] || { s: 0, n: 0 });"
+        & "  M.s += pc; M.n++;"
+        & "}"
+        & "Object.keys(series).forEach(acct => {"
+        & "  const arr = series[acct].sort((a, b) => a.t - b.t);"
+        & "  if (arr.length < 2) return;"
+        & "  const base = arr[0]; if (base.w <= 0) return;"
+        & "  const grp = cohort[acct] || 'Untagged';"
+        & "  const groups = (grp === 'Mochi' || grp === 'Clinic') ? ['All', grp] : ['All'];"
+        & "  let bestPct = 0; let lastT = base.t;"
+        & "  arr.forEach(pt => { if (pt.t > lastT) lastT = pt.t; });"
+        & "  const engaged = ((todayMs - lastT) / 86400000) <= LAPSE_DAYS;"
+        & "  const modes = engaged ? ['all', 'engaged'] : ['all'];"
+        & "  modes.forEach(md => { R[md].trace++; });"
+        & "  arr.forEach((pt, i) => {"
+        & "    const days = (pt.t - base.t) / 86400000;"
+        & "    const pc = (pt.w - base.w) / base.w * 100;"
+        & "    if (i > 0) {"
+        & "      const mo = Math.round(days / 30.44);"
+        & "      if (mo >= 0 && mo <= 18) modes.forEach(md => groups.forEach(g => addMonth(R[md].month, g, mo, pc)));"
+        & "    }"
+        & "    if (pc < bestPct) bestPct = pc;"
+        & "  });"
+        & "  const fuDays = (lastT - base.t) / 86400000;"
+        & "  if (fuDays >= 90) modes.forEach(md => groups.forEach(g => R[md].best[g].push(-bestPct)));"
+        & "});"
+
+        & "if (R.all.trace === 0) {"
+        & "  document.getElementById('err').textContent = 'No traceable patients. First 120 chars: ' + wRaw.slice(0, 120);"
+        & "} else {"
+
+        & "let charts = {};"
+        & "const months = [];"
+        & "for (let m = 0; m <= 18; m++) months.push(m);"
+
+        & "function paint(mode) {"
+        & "  const D = R[mode];"
+        & "  const monthAcc = D.month, bestLoss = D.best, traceable = D.trace;"
+
+        & "  const allBest = bestLoss.All;"
+        & "  const meanBest = allBest.length ? allBest.reduce((a, v) => a + v, 0) / allBest.length : 0;"
+        & "  const pct10 = allBest.length ? allBest.filter(v => v >= 10).length / allBest.length * 100 : 0;"
+        & "  document.getElementById('subtitle').textContent ="
+        & "    (mode === 'engaged' ? 'Engaged only (weighed in within 200 days) · ' : 'All traceable patients · ') +"
+        & "    traceable + ' patients (Mochi ' + bestLoss.Mochi.length + ', clinic ' + bestLoss.Clinic.length + ' with 90+ day follow-up)';"
+        & "  document.getElementById('bN').textContent   = 'Traceable: ' + traceable;"
+        & "  document.getElementById('bMean').textContent = 'Mean best loss: ' + meanBest.toFixed(1) + '%';"
+        & "  document.getElementById('b10').textContent   = 'Reached 10%: ' + Math.round(pct10) + '%';"
+        & "  document.getElementById('bFU').textContent   = '90+ day cohort: ' + allBest.length;"
+
+        & "  function lineFor(g) {"
+        & "    return months.map(m => { const M = monthAcc[g][m]; return (M && M.n >= 5) ? +(M.s / M.n).toFixed(2) : null; });"
+        & "  }"
+        & "  function nFor(g) { return months.map(m => { const M = monthAcc[g][m]; return M ? M.n : 0; }); }"
+        & "  const nAll = nFor('All'), nMochi = nFor('Mochi'), nClinic = nFor('Clinic');"
+        & "  if (charts.c1) charts.c1.destroy();"
+        & "  charts.c1 = new Chart(document.getElementById('c1'), {"
+        & "  type: 'line',"
+        & "  data: {"
+        & "    labels: months.map(m => 'M' + m),"
+        & "    datasets: ["
+        & "      { label: 'All', data: lineFor('All'), borderColor: '#1B3A5C', borderWidth: 3,"
+        & "        backgroundColor: 'rgba(27,58,92,0.08)', fill: true, tension: 0.3, spanGaps: true,"
+        & "        pointRadius: 3, pointBackgroundColor: '#1B3A5C', pointBorderColor: '#F6D793', pointBorderWidth: 1.5 },"
+        & "      { label: 'Mochi', data: lineFor('Mochi'), borderColor: '#D23B2E', borderWidth: 2,"
+        & "        backgroundColor: 'transparent', fill: false, tension: 0.3, spanGaps: true, pointRadius: 2 },"
+        & "      { label: 'Clinic (WSOC)', data: lineFor('Clinic'), borderColor: '#1a9e5c', borderWidth: 2,"
+        & "        backgroundColor: 'transparent', fill: false, tension: 0.3, spanGaps: true, pointRadius: 2 }"
+        & "    ]"
+        & "  },"
+        & "  options: {"
+        & "    responsive: true, maintainAspectRatio: false, animation: { duration: 700 },"
+        & "    interaction: { mode: 'index', intersect: false },"
+        & "    plugins: {"
+        & "      legend: { display: true, position: 'bottom',"
+        & "        labels: { color: '#1B3A5C', font: { family: 'Inter', size: 11, weight: '600' }, usePointStyle: true, padding: 14 } },"
+        & "      tooltip: {"
+        & "        animation: false, backgroundColor: '#1B3A5C', titleColor: '#F6D793', bodyColor: '#fff',"
+        & "        bodyFont: { size: 12, weight: '600' }, padding: 10, cornerRadius: 8, displayColors: true,"
+        & "        callbacks: {"
+        & "          label: item => {"
+        & "            const g = item.dataset.label; const i = item.dataIndex;"
+        & "            const n = g === 'All' ? nAll[i] : g === 'Mochi' ? nMochi[i] : nClinic[i];"
+        & "            return ' ' + g + ': ' + item.parsed.y + '%  (n=' + n + ')';"
+        & "          }"
+        & "        }"
+        & "      }"
+        & "    },"
+        & "    scales: {"
+        & "      x: { grid: { display: false }, title: { display: true, text: 'Months since baseline', color: '#1B3A5C', font: { size: 11, family: 'Inter', weight: '600' } },"
+        & "        ticks: { color: '#1B3A5C', font: { family: 'Inter', size: 10, weight: '600' } } },"
+        & "      y: { title: { display: true, text: 'Mean weight change (%)', color: '#1B3A5C', font: { size: 11, family: 'Inter', weight: '600' } },"
+        & "        grid: { color: 'rgba(27,58,92,0.12)' }, ticks: { color: '#1B3A5C', font: { family: 'Inter' }, callback: v => v + '%' } }"
+        & "    }"
+        & "  }"
+        & "});"
+
+        & "const thresholds = [5, 10, 15, 20];"
+        & "function respRates(arr) {"
+        & "  return thresholds.map(t => arr.length ? +(arr.filter(v => v >= t).length / arr.length * 100).toFixed(1) : 0);"
+        & "}"
+        & "  if (charts.c2) charts.c2.destroy();"
+        & "  charts.c2 = new Chart(document.getElementById('c2'), {"
+        & "  type: 'bar',"
+        & "  data: {"
+        & "    labels: thresholds.map(t => '≥' + t + '% loss'),"
+        & "    datasets: ["
+        & "      { label: 'All', data: respRates(bestLoss.All), backgroundColor: 'rgba(27,58,92,0.85)', borderRadius: 4 },"
+        & "      { label: 'Mochi', data: respRates(bestLoss.Mochi), backgroundColor: 'rgba(210,59,46,0.85)', borderRadius: 4 },"
+        & "      { label: 'Clinic', data: respRates(bestLoss.Clinic), backgroundColor: 'rgba(26,158,92,0.85)', borderRadius: 4 }"
+        & "    ]"
+        & "  },"
+        & "  options: {"
+        & "    responsive: true, maintainAspectRatio: false, animation: { duration: 700 },"
+        & "    plugins: {"
+        & "      legend: { display: true, position: 'bottom',"
+        & "        labels: { color: '#1B3A5C', font: { family: 'Inter', size: 10, weight: '600' }, usePointStyle: true, padding: 12 } },"
+        & "      tooltip: {"
+        & "        animation: false, backgroundColor: '#1B3A5C', titleColor: '#F6D793', bodyColor: '#fff',"
+        & "        bodyFont: { size: 12, weight: '600' }, padding: 10, cornerRadius: 8, displayColors: true,"
+        & "        callbacks: { label: item => ' ' + item.dataset.label + ': ' + item.parsed.y + '%' }"
+        & "      }"
+        & "    },"
+        & "    scales: {"
+        & "      x: { grid: { display: false }, ticks: { color: '#1B3A5C', font: { family: 'Inter', size: 11, weight: '600' } } },"
+        & "      y: { beginAtZero: true, max: 100,"
+        & "        title: { display: true, text: 'Percent of patients', color: '#1B3A5C', font: { size: 11, family: 'Inter', weight: '600' } },"
+        & "        grid: { color: 'rgba(27,58,92,0.12)' }, ticks: { color: '#1B3A5C', font: { family: 'Inter' }, callback: v => v + '%' } }"
+        & "    }"
+        & "  }"
+        & "});"
+
+        & "const bins = [[-100,0],[0,5],[5,10],[10,15],[15,20],[20,25],[25,200]];"
+        & "const binLbl = ['gain','0-5%','5-10%','10-15%','15-20%','20-25%','25%+'];"
+        & "const hist = bins.map(b => allBest.filter(v => v >= b[0] && v < b[1]).length);"
+        & "  if (charts.c3) charts.c3.destroy();"
+        & "  charts.c3 = new Chart(document.getElementById('c3'), {"
+        & "  type: 'bar',"
+        & "  data: {"
+        & "    labels: binLbl,"
+        & "    datasets: [{ label: 'Patients', data: hist,"
+        & "      backgroundColor: bins.map((b, i) => i === 0 ? 'rgba(210,59,46,0.8)' : 'rgba(27,58,92,0.8)'),"
+        & "      borderRadius: 4 }]"
+        & "  },"
+        & "  options: {"
+        & "    responsive: true, maintainAspectRatio: false, animation: { duration: 700 },"
+        & "    plugins: {"
+        & "      legend: { display: false },"
+        & "      tooltip: {"
+        & "        animation: false, backgroundColor: '#1B3A5C', titleColor: '#F6D793', bodyColor: '#fff',"
+        & "        bodyFont: { size: 12, weight: '600' }, padding: 10, cornerRadius: 8, displayColors: false,"
+        & "        callbacks: { label: item => ' ' + item.parsed.y + ' patients' }"
+        & "      }"
+        & "    },"
+        & "    scales: {"
+        & "      x: { grid: { display: false }, title: { display: true, text: 'Best weight loss achieved', color: '#1B3A5C', font: { size: 11, family: 'Inter', weight: '600' } },"
+        & "        ticks: { color: '#1B3A5C', font: { family: 'Inter', size: 10, weight: '600' } } },"
+        & "      y: { beginAtZero: true, title: { display: true, text: 'Patients', color: '#1B3A5C', font: { size: 11, family: 'Inter', weight: '600' } },"
+        & "        grid: { color: 'rgba(27,58,92,0.12)' }, ticks: { color: '#1B3A5C', font: { family: 'Inter' }, precision: 0 } }"
+        & "    }"
+        & "  }"
+        & "  });"
+        & "}"
+
+        & "let viewMode = 'all';"
+        & "const tbtn = document.getElementById('toggle');"
+        & "tbtn.onclick = function() {"
+        & "  viewMode = (viewMode === 'all') ? 'engaged' : 'all';"
+        & "  this.innerHTML = (viewMode === 'all')"
+        & "    ? 'Showing: all patients — click to show engaged only'"
+        & "    : 'Showing: engaged only (200-day) — click to show all';"
+        & "  this.style.background = (viewMode === 'engaged') ? '#1B3A5C' : '#FBE9C0';"
+        & "  this.style.color = (viewMode === 'engaged') ? '#FBE9C0' : '#1B3A5C';"
+        & "  paint(viewMode);"
+        & "};"
+        & "paint('all');"
+
+        & "}"
+        & "</" & "script>"
+        & "</body></html>"
+
+] ;
+
+If ( sqlFailed or IsEmpty ( wRows ) ; fallback ; html )
+
+)

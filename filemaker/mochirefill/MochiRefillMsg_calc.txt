@@ -1,0 +1,60 @@
+// MochiRefillMsg v1.1 - 2026-08-17 - personalized refill message for Mochi patients.
+// Unstored Text calc on Obesity Management. Uses existing helpers: Weightpounds, CurrentWeight,
+// WeightLost, PercentWeightLossDisplay, TimeSinceLastWeighInDisplay, lastVisit, DaysSinceLabs.
+// Cadence: video visit every 90 days. Empty for non-Mochi records.
+If ( Clinic <> "Mochi" ; "" ;
+Let ( [
+rx = Trim ( GetValue ( Prescription ; 1 ) ) ;
+pct = PercentWeightLossDisplay ;
+lost = Round ( WeightLost ; 1 ) ;
+cw = Round ( CurrentWeight ; 1 ) ;
+wdays = TimeSinceLastWeighInDisplay ;
+dsv = Get ( CurrentDate ) - lastVisit ;
+due = lastVisit + 90 ;
+labTxt = DaysSinceLabs ;
+ld = Case ( labTxt = "Today" ; 0 ; GetAsNumber ( labTxt ) ) ;
+sq = ExecuteSQL ( "SELECT MAX(\"Date\") FROM SECA WHERE AccountNumber=?" ; "" ; "" ; AccountNumber ) ;
+sq2 = If ( sq = "?" ; "" ; sq ) ;
+scDate = Case ( IsEmpty ( sq2 ) ; "" ;
+ PatternCount ( sq2 ; "-" ) > 0 ; Date ( Middle ( sq2 ; 6 ; 2 ) ; Middle ( sq2 ; 9 ; 2 ) ; Left ( sq2 ; 4 ) ) ;
+ GetAsDate ( sq2 ) ) ;
+sc = If ( IsEmpty ( scDate ) ; "" ; Get ( CurrentDate ) - scDate ) ;
+age = Year ( Get ( CurrentDate ) ) - Year ( PT_DOB ) - ( Get ( CurrentDate ) < Date ( Month ( PT_DOB ) ; Day ( PT_DOB ) ; Year ( Get ( CurrentDate ) ) ) ) ;
+
+pGreet = "Hi " & Trim ( PT_FirstName ) & "," ;
+
+pRefill = "I refilled your " & If ( IsEmpty ( rx ) ; "medication" ; rx ) & ". Any side effects since the last refill?" ;
+
+pProgress = Case (
+ IsEmpty ( pct ) or pct <= 0 ; "" ;
+ pct >= 20 ; "You are down " & lost & " lbs - that is " & pct & "% of your starting weight. Outstanding work." ;
+ pct >= 10 ; "You are down " & lost & " lbs - " & pct & "% of your starting weight. Great progress." ;
+ "You are down " & lost & " lbs so far - " & pct & "% of your starting weight. Off to a good start - keep it going." ) ;
+
+pWeight = Case (
+ IsEmpty ( wdays ) ; "Can you send me a current weight so I can track your progress?" ;
+ wdays <= 7 ; "I have your weight from this week (" & cw & " lbs) - thanks for staying on top of it." ;
+ "The last weight I have is " & cw & " lbs from " & wdays & " days ago - reply with a current weight when you can." ) ;
+
+pVisit = Case (
+ dsv >= 90 ; "It has been about " & Round ( dsv / 30 ; 0 ) & " months since our last visit, so we are due. Please schedule a video visit in the next week or two." ;
+ dsv >= 60 ; "Your next video visit is due by " & due & " - please get one on the calendar in the next 30 days." ;
+ "We are all set on visits until around " & due & "." ) ;
+
+pLabs = Case (
+ IsEmpty ( labTxt ) ; "I do not have any labs on file for you. If you have recent results, forward them to me - otherwise let me know and I will order a set." ;
+ ld > 365 ; "Your labs on file are over a year old. If you have newer results, please forward them - or I can order a fresh set, just say the word." ;
+ "Your labs from about " & Round ( ld / 30 ; 0 ) & " months ago are on file - nothing needed there for now." ) ;
+
+pBody = Case (
+ IsEmpty ( sc ) ; "If you could, go get a body composition study and upload it to the portal for me to review. InBody is a good choice of machine, but any would do. To find one near you: https://inbodyusa.com/" ;
+ sc > 180 ; "It has been about " & Round ( sc / 30 ; 0 ) & " months since your last body composition - time for a repeat. Any InBody location works: https://inbodyusa.com/" ;
+ "Your body composition from " & scDate & " is current - nothing needed there." ) ;
+
+pMuscle = If ( age >= 60 and not IsEmpty ( pct ) and pct > 0 ;
+ "One more thing - at " & age & ", protecting muscle while the weight comes off really matters. Aim for protein at every meal and strength training at least twice a week." ; "" ) ;
+
+pClose = "Talk soon."
+] ;
+List ( pGreet ; pRefill ; pProgress ; pWeight ; pVisit ; pLabs ; pBody ; pMuscle ; pClose )
+) )

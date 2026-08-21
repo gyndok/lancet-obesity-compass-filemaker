@@ -1,0 +1,35 @@
+// PanelDash_Head v1.0 - 2026-08-17 - CSS + offline Chart.js + DOM shells. Pairs with PanelDash_Body v1.0 + PanelDash_Body2 v1.0.
+"<!DOCTYPE html><html><head><meta charset='utf-8'><style>*{box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#f6f1e7;color:#2b2b26;margin:0;padding:18px 22px}
+.hdr h1{margin:0;font-size:22px;color:#0e5c4a;letter-spacing:.3px}
+.hdr .sub{color:#7a6a4f;font-size:12px;margin-top:2px}
+#err{display:none;background:#fde8e8;border:1px solid #b91c1c;color:#b91c1c;padding:6px 10px;border-radius:6px;margin:10px 0;font-size:12px}
+#chips{margin:14px 0 10px}
+.chip{border:1px solid #c9b98f;background:#fff;color:#5c5342;border-radius:14px;padding:5px 14px;margin-right:8px;font-size:13px;cursor:pointer}
+.chip.on{background:#0e5c4a;border-color:#0e5c4a;color:#fff}
+.fb{color:#b45309;font-size:12px;margin-left:8px}
+#tiles{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.tile{background:#fff;border:1px solid #e3d8c2;border-radius:10px;padding:12px 18px;min-width:150px}
+.tile .tv{font-size:26px;font-weight:700;color:#0e5c4a}
+.tile.warn .tv{color:#b45309}
+.tile .tl{font-size:11px;color:#7a6a4f;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.card{background:#fff;border:1px solid #e3d8c2;border-radius:10px;padding:12px 16px;margin-bottom:14px}
+.card h2{margin:0 0 8px;font-size:14px;color:#2b2b26}
+.card h2 .n{display:inline-block;min-width:20px;text-align:center;background:#efe7d4;border-radius:10px;padding:1px 7px;font-size:12px;margin-left:6px;color:#5c5342}
+.card.red h2{color:#b91c1c}
+.card.amb h2{color:#b45309}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;color:#7a6a4f;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:4px 10px 4px 0;border-bottom:1px solid #e3d8c2}
+td{padding:5px 10px 5px 0;border-bottom:1px solid #f0e9d9}
+a.pl{color:#0e5c4a;font-weight:600;text-decoration:none}
+a.pl:hover{text-decoration:underline}
+.bdg-m,.bdg-w{font-size:10px;border-radius:8px;padding:1px 7px;vertical-align:1px}
+.bdg-m{background:#e4eef9;color:#1d4e89}
+.bdg-w{background:#e8f2ec;color:#0e5c4a}
+.clear{color:#7a6a4f;font-size:13px;font-style:italic}
+#charts{display:flex;gap:14px;flex-wrap:wrap}
+#charts .card{flex:1;min-width:340px}
+.foot{color:#a2916f;font-size:11px;margin-top:8px}
+@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.chip{display:none}}</style><script>" &
+Globals::ChartJS_Source &
+"</script><script>window.__pdboot=[1];</script></head><body><div class='hdr'><h1>Obesity Panel Dashboard</h1><div class='sub'>Women's Specialists of Clear Lake &middot; Mochi</div></div><div id='err'></div><div id='chips'></div><div id='tiles'></div><div class='card red'><h2>Lost to follow-up &gt;122 days<span class='n' id='ltfu-n'></span></h2><div id='ltfu'></div></div><div class='card amb'><h2>Amber window 91-122 days<span class='n' id='amber-n'></span></h2><div id='amber'></div></div><div class='card'><h2>Plateaued on AOM (&lt;2% loss / trailing 8 wk, &gt;5% above target)<span class='n' id='plat-n'></span></h2><div id='plat'></div></div><div class='card'><h2>Muscle-loss outliers (&lt;75% of tissue loss was fat, SECA)<span class='n' id='musc-n'></span></h2><div id='musc'></div></div><div class='card'><h2>Labs aging out (on AOM, none in 12 months)<span class='n' id='labs-n'></span></h2><div id='labs'></div></div><div id='charts'><div class='card'><h2>%TBWL distribution</h2><canvas id='cv-hist' width='560' height='260'></canvas></div><div class='card'><h2>AOM mix</h2><canvas id='cv-mix' width='560' height='260'></canvas></div></div><div class='foot'>PanelDash v1.0 &middot; click a name to open the chart (needs GoToPatient script)</div>"

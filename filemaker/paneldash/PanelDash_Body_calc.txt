@@ -1,0 +1,130 @@
+// PanelDash_Body v1.0 - 2026-08-17 - panel SQL + compute. Pairs with PanelDash_Head v1.0 + PanelDash_Body2 v1.0.
+Let ( [
+q1 = ExecuteSQL ( "SELECT AccountNumber, PT_LastName, PT_FirstName, Status, Clinic, Prescription, TargetWeight FROM \"Obesity Management\"" ; "|" ; ¶ ) ;
+q2 = ExecuteSQL ( "SELECT AccountNumber, \"Date\", Weight FROM WeighIn" ; "|" ; ¶ ) ;
+q3 = ExecuteSQL ( "SELECT AccountNumber, \"Date\", SkeletalMuscleMass, \"Fat Mass\" FROM SECA" ; "|" ; ¶ ) ;
+q4 = ExecuteSQL ( "SELECT AccountNumber, \"Date\" FROM Labs" ; "|" ; ¶ ) ;
+q5 = ExecuteSQL ( "SELECT AccountNumber, \"Date\", returntoclinic FROM Visits" ; "|" ; ¶ ) ;
+d1 = Substitute ( q1 ; ["\\";""] ; ["'";""] ; ["\"";""] ; [Char(10);¶] ; [¶;"\n"] ) ;
+d2 = Substitute ( q2 ; ["\\";""] ; ["'";""] ; ["\"";""] ; [Char(10);¶] ; [¶;"\n"] ) ;
+d3 = Substitute ( q3 ; ["\\";""] ; ["'";""] ; ["\"";""] ; [Char(10);¶] ; [¶;"\n"] ) ;
+d4 = Substitute ( q4 ; ["\\";""] ; ["'";""] ; ["\"";""] ; [Char(10);¶] ; [¶;"\n"] ) ;
+d5 = Substitute ( q5 ; ["\\";""] ; ["'";""] ; ["\"";""] ; [Char(10);¶] ; [¶;"\n"] )
+] ;
+"<script>" &
+"/* PanelDash Body v1.0 - data + compute */
+var PANEL_VERSION='1.0';
+var RAW_PTS='" & d1 &
+"';
+var RAW_WT='" & d2 &
+"';
+var RAW_SECA='" & d3 &
+"';
+var RAW_LABS='" & d4 &
+"';
+var RAW_VIS='" & d5 &
+"';
+var TODAY=(typeof PANEL_TODAY!=='undefined')?PANEL_TODAY:Date.now();
+function P(s){if(!s||s==='?'){return [];}return s.split('\n').filter(function(x){return x.length>0;});}
+function pd(s){if(!s){return null;}
+ var m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+ if(m){return new Date(+m[1],+m[2]-1,+m[3]).getTime();}
+ m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+ if(m){return new Date(+m[3],+m[1]-1,+m[2]).getTime();}
+ return null;}
+function daysAgo(ms){return Math.floor((TODAY-ms)/86400000);}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmtD(ms){if(ms==null){return '-';}var d=new Date(ms);return (d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();}
+function r1(x){return Math.round(x*10)/10;}
+function classifyRx(rx){var s=(rx||'').toLowerCase();
+ if(!s.replace(/\s/g,'')){return 'None';}
+ if(s.indexOf('tirzep')>=0||s.indexOf('zepbound')>=0||s.indexOf('mounjaro')>=0){return 'Tirzepatide';}
+ if(s.indexOf('semaglut')>=0||s.indexOf('wegovy')>=0||s.indexOf('ozempic')>=0||s.indexOf('rybelsus')>=0){return 'Semaglutide';}
+ if(s.indexOf('orforglipron')>=0||s.indexOf('foundayo')>=0){return 'Orforglipron';}
+ if(s.indexOf('liraglut')>=0||s.indexOf('saxenda')>=0){return 'Liraglutide';}
+ if(s.indexOf('qsymia')>=0||(s.indexOf('phenterm')>=0&&s.indexOf('topiramate')>=0)){return 'Qsymia';}
+ if(s.indexOf('phenterm')>=0){return 'Phentermine';}
+ if(s.indexOf('contrave')>=0||s.indexOf('naltrex')>=0){return 'Contrave';}
+ if(s.indexOf('metform')>=0){return 'Metformin';}
+ if(s.indexOf('orlistat')>=0||s.indexOf('xenical')>=0){return 'Orlistat';}
+ return 'Other';}
+function buildModel(){
+ var pts={},order=[];
+ P(RAW_PTS).forEach(function(r){var p=r.split('|');var a=(p[0]||'').trim();if(!a){return;}
+  pts[a]={acct:a,last:p[1]||'',first:p[2]||'',status:(p[3]||'').trim(),clinic:(p[4]||'').trim(),
+   rx:p[5]||'',target:parseFloat(p[6])||null,wt:[],seca:[],labs:[],vis:[]};
+  order.push(a);});
+ P(RAW_WT).forEach(function(r){var p=r.split('|');var o=pts[(p[0]||'').trim()];if(!o){return;}
+  var t=pd(p[1]),w=parseFloat(p[2]);if(t&&w>0){o.wt.push({t:t,w:w});}});
+ P(RAW_SECA).forEach(function(r){var p=r.split('|');var o=pts[(p[0]||'').trim()];if(!o){return;}
+  var t=pd(p[1]),sm=parseFloat(p[2]),f=parseFloat(p[3]);
+  if(t&&!isNaN(sm)&&!isNaN(f)){o.seca.push({t:t,sm:sm,f:f});}});
+ P(RAW_LABS).forEach(function(r){var p=r.split('|');var o=pts[(p[0]||'').trim()];if(!o){return;}
+  var t=pd(p[1]);if(t){o.labs.push(t);}});
+ P(RAW_VIS).forEach(function(r){var p=r.split('|');var o=pts[(p[0]||'').trim()];if(!o){return;}
+  var t=pd(p[1]);var rtc=p.slice(2).join('|');if(t){o.vis.push({t:t,rtc:rtc});}});
+ order.forEach(function(a){var o=pts[a];
+  o.wt.sort(function(x,y){return x.t-y.t;});
+  o.seca.sort(function(x,y){return x.t-y.t;});
+  o.vis.sort(function(x,y){return x.t-y.t;});
+  o.tbwl=null;o.trail8=null;o.lastW=null;o.lastWT=null;
+  if(o.wt.length>0){
+   o.lastW=o.wt[o.wt.length-1].w;o.lastWT=o.wt[o.wt.length-1].t;
+   if(o.wt.length>=2){o.tbwl=(o.wt[0].w-o.lastW)/o.wt[0].w*100;
+    var tgt=o.lastWT-56*86400000,best=22*86400000,ref=null;
+    o.wt.forEach(function(x){if(x.t>=o.lastWT){return;}
+     var d=Math.abs(x.t-tgt);if(d<best){best=d;ref=x;}});
+    if(ref){o.trail8=(ref.w-o.lastW)/ref.w*100;}}}
+  var lv=o.vis.length?o.vis[o.vis.length-1].t:null;
+  o.rtc=o.vis.length?o.vis[o.vis.length-1].rtc:'';
+  o.lastContact=null;
+  if(o.lastWT!=null){o.lastContact=o.lastWT;}
+  if(lv!=null&&(o.lastContact==null||lv>o.lastContact)){o.lastContact=lv;}
+  o.daysSince=(o.lastContact!=null)?daysAgo(o.lastContact):null;
+  var ll=null;o.labs.forEach(function(t){if(ll==null||t>ll){ll=t;}});
+  o.lastLab=ll;o.labDays=(ll!=null)?daysAgo(ll):null;
+  o.fatFrac=null;o.dM=null;o.dF=null;
+  if(o.seca.length>=2){
+   var f0=o.seca[0],l0=o.seca[o.seca.length-1];
+   o.dF=f0.f-l0.f;o.dM=f0.sm-l0.sm;
+   var tl=o.dF+o.dM;
+   if(tl>0){o.fatFrac=(o.dM<=0)?100:Math.round(o.dF/tl*100);}}
+  o.aom=classifyRx(o.rx);});
+ return {pts:pts,order:order};}
+function selectPanel(M){var act=[],fb=[];
+ M.order.forEach(function(a){var o=M.pts[a];
+  if(o.status.toLowerCase()==='active'){act.push(o);}
+  if(o.daysSince!=null&&o.daysSince<=365){fb.push(o);}});
+ if(act.length>0){return {list:act,fallback:false};}
+ return {list:fb,fallback:true};}
+function triage(list){
+ var r={ltfu:[],amber:[],plateau:[],muscle:[],labs:[]};
+ list.forEach(function(o){
+  if(o.daysSince==null||o.daysSince>122){r.ltfu.push(o);}
+  else if(o.daysSince>=91){r.amber.push(o);}
+  if(o.aom!=='None'&&o.daysSince!=null&&o.daysSince<=122&&o.trail8!=null&&o.trail8<2&&o.target!=null&&o.lastW!=null&&o.lastW>o.target*1.05){r.plateau.push(o);}
+  if(o.fatFrac!=null&&o.fatFrac<75&&(o.dF+o.dM)>=5){r.muscle.push(o);}
+  if(o.aom!=='None'&&(o.labDays==null||o.labDays>365)){r.labs.push(o);}});
+ function nsafe(v,big){return (v==null)?big:v;}
+ r.ltfu.sort(function(x,y){return nsafe(y.daysSince,999999)-nsafe(x.daysSince,999999);});
+ r.amber.sort(function(x,y){return y.daysSince-x.daysSince;});
+ r.plateau.sort(function(x,y){return x.trail8-y.trail8;});
+ r.muscle.sort(function(x,y){return x.fatFrac-y.fatFrac;});
+ r.labs.sort(function(x,y){return nsafe(y.labDays,999999)-nsafe(x.labDays,999999);});
+ return r;}
+function median(arr){if(!arr.length){return null;}
+ var a=arr.slice().sort(function(x,y){return x-y;});
+ var n=a.length;return (n%2)?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2;}
+function histBins(list){var b=[0,0,0,0,0,0];
+ list.forEach(function(o){if(o.tbwl==null){return;}
+  var t=o.tbwl,i;
+  if(t<=0){i=0;}else if(t<5){i=1;}else if(t<10){i=2;}else if(t<15){i=3;}else if(t<20){i=4;}else{i=5;}
+  b[i]++;});
+ return b;}
+function aomMix(list){var m={};
+ list.forEach(function(o){m[o.aom]=(m[o.aom]||0)+1;});
+ return m;}
+var MODEL=buildModel();
+" &
+"</script><script>window.__pdboot.push(2);</script>"
+)

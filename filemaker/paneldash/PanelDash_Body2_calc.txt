@@ -1,0 +1,89 @@
+// PanelDash_Body2 v1.0 - 2026-08-17 - render + charts + filter. Pairs with PanelDash_Head v1.0 + PanelDash_Body v1.0.
+"<script>" &
+"/* PanelDash Body2 v1.0 - render + charts */
+var FILTER='All';
+var CH={};
+function sec(n,f){try{f();}catch(e){
+ var d=document.getElementById('err');
+ if(d){d.style.display='block';d.textContent=d.textContent+' ['+n+': '+e.message+']';}}}
+function link(o){return 'fmp://$/Obesity%20Management?script=GoToPatient&param='+encodeURIComponent(o.acct);}
+function nameCell(o){
+ var b=(o.clinic==='Mochi')?'<span class=bdg-m>Mochi</span>':((o.clinic==='WSOC')?'<span class=bdg-w>WSOC</span>':'');
+ return '<a class=pl href='+link(o)+'>'+esc(o.last)+', '+esc(o.first)+'</a> '+b;}
+function tbl(rows,hdr){
+ if(!rows.length){return '<div class=clear>None - panel clear</div>';}
+ var h='<table><tr>';hdr.forEach(function(x){h+='<th>'+x+'</th>';});h+='</tr>';
+ rows.forEach(function(r){h+='<tr>';r.forEach(function(c){h+='<td>'+c+'</td>';});h+='</tr>';});
+ return h+'</table>';}
+function setFilter(c){FILTER=c;renderAll();}
+function filtered(list){
+ if(FILTER==='All'){return list;}
+ return list.filter(function(o){return o.clinic===FILTER;});}
+function renderAll(){
+ var pan=selectPanel(MODEL);
+ var base=pan.list;
+ var list=filtered(base);
+ var T=triage(list);
+ sec('chips',function(){
+  var cAll=base.length;
+  var cW=base.filter(function(o){return o.clinic==='WSOC';}).length;
+  var cM=base.filter(function(o){return o.clinic==='Mochi';}).length;
+  var mk=function(n,c){return '<button class=\"chip'+((FILTER===n)?' on':'')+'\" onclick=\"setFilter(\''+n+'\')\">'+n+' ('+c+')</button>';};
+  document.getElementById('chips').innerHTML=mk('All',cAll)+mk('WSOC',cW)+mk('Mochi',cM)+
+   (pan.fallback?'<span class=fb>Status field empty - showing any contact within 12 months</span>':'');});
+ sec('tiles',function(){
+  var tb=[];list.forEach(function(o){if(o.tbwl!=null){tb.push(o.tbwl);}});
+  var md=median(tb);
+  var na=list.filter(function(o){return o.aom!=='None';}).length;
+  var out=T.ltfu.length+T.amber.length;
+  var tile=function(v,l,cls){return '<div class=\"tile '+(cls||'')+'\"><div class=tv>'+v+'</div><div class=tl>'+l+'</div></div>';};
+  document.getElementById('tiles').innerHTML=
+   tile(list.length,'Patients on panel')+
+   tile((md==null)?'-':r1(md)+'%','Median %TBWL')+
+   tile(list.length?Math.round(na/list.length*100)+'%':'-','On an AOM')+
+   tile(out,'Need outreach',out?'warn':'');});
+ sec('ltfu',function(){
+  document.getElementById('ltfu').innerHTML=tbl(T.ltfu.map(function(o){
+   return [nameCell(o),(o.daysSince==null)?'no contact':o.daysSince+' d',fmtD(o.lastContact),esc(o.rtc)];}),
+   ['Patient','Days since contact','Last contact','Planned return']);
+  document.getElementById('ltfu-n').textContent=T.ltfu.length;});
+ sec('amber',function(){
+  document.getElementById('amber').innerHTML=tbl(T.amber.map(function(o){
+   return [nameCell(o),o.daysSince+' d',fmtD(o.lastContact),esc(o.rtc)];}),
+   ['Patient','Days since contact','Last contact','Planned return']);
+  document.getElementById('amber-n').textContent=T.amber.length;});
+ sec('plat',function(){
+  document.getElementById('plat').innerHTML=tbl(T.plateau.map(function(o){
+   return [nameCell(o),esc(o.aom),r1(o.trail8)+'%',(o.tbwl==null)?'-':r1(o.tbwl)+'%',r1(o.lastW)+' vs '+o.target];}),
+   ['Patient','AOM','Trailing 8wk','%TBWL total','Now vs target']);
+  document.getElementById('plat-n').textContent=T.plateau.length;});
+ sec('musc',function(){
+  document.getElementById('musc').innerHTML=tbl(T.muscle.map(function(o){
+   return [nameCell(o),o.fatFrac+'%',r1(o.dM)+' lb',r1(o.dF)+' lb'];}),
+   ['Patient','Loss that was fat','Muscle lost','Fat lost']);
+  document.getElementById('musc-n').textContent=T.muscle.length;});
+ sec('labs',function(){
+  document.getElementById('labs').innerHTML=tbl(T.labs.map(function(o){
+   return [nameCell(o),esc(o.aom),(o.lastLab==null)?'never':fmtD(o.lastLab),(o.labDays==null)?'-':o.labDays+' d'];}),
+   ['Patient','AOM','Last labs','Age']);
+  document.getElementById('labs-n').textContent=T.labs.length;});
+ sec('hist',function(){
+  if(CH.h){CH.h.destroy();}
+  var b=histBins(list);
+  CH.h=new Chart(document.getElementById('cv-hist').getContext('2d'),{type:'bar',
+   data:{labels:['Gain/0%','0-5%','5-10%','10-15%','15-20%','20%+'],
+    datasets:[{data:b,backgroundColor:['#b91c1c','#d9c7a7','#a8c6b8','#5f9d8a','#2f7d68','#0e5c4a'],borderWidth:0}]},
+   options:{responsive:false,plugins:{legend:{display:false}},
+    scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});});
+ sec('mix',function(){
+  if(CH.m){CH.m.destroy();}
+  var m=aomMix(list),ls=[],ds=[];
+  Object.keys(m).sort(function(a,b){return m[b]-m[a];}).forEach(function(k){ls.push(k+' ('+m[k]+')');ds.push(m[k]);});
+  CH.m=new Chart(document.getElementById('cv-mix').getContext('2d'),{type:'doughnut',
+   data:{labels:ls,datasets:[{data:ds,borderWidth:1,
+    backgroundColor:['#0e5c4a','#5f9d8a','#d9c7a7','#b8860b','#7a6a4f','#a8c6b8','#c17f5f','#8896ab','#b91c1c','#444444']}]},
+   options:{responsive:false,plugins:{legend:{position:'right'}}}});});
+}
+sec('boot',renderAll);
+" &
+"</script><script>window.__pdboot.push(3);</script></body></html>"
