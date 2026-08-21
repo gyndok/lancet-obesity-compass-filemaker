@@ -1,0 +1,121 @@
+// MetabolicFlags v2.0 - 2026-08-21 - HOMA-IR + FIB-4 computed from Labsbefore text.
+// Unstored Text calc on Obesity Management. Parses lines "YYYY-MM-DD (emdash) Name (emdash) Value ..."
+// Per analyte, newest ISO date wins (string compare, position-independent). Non-numeric values
+// (urine Glucose "Negative") are skipped. Empty when nothing computable; one line per index.
+// HOMA-IR = glucose*insulin/405. FIB-4 = age*AST/(platelets*sqrt(ALT)), age taken at the AST lab date.
+// Tiers: HOMA <1 optimal / <2 normal / <3 borderline / >=3 abnormal.
+// FIB-4 <1.3 normal (age>=65 uses <2.0) / <=2.67 indeterminate / >2.67 abnormal.
+Let ( [
+src = Substitute ( Labsbefore ; Char(8212) ; "|" ) ;
+n = ValueCount ( src ) ;
+
+g = While ( [ i = 1 ; bd = "" ; bv = "" ] ; i <= n ;
+ [ ln = GetValue ( src ; i ) ;
+   p1 = Position ( ln ; "|" ; 1 ; 1 ) ;
+   p2 = Position ( ln ; "|" ; 1 ; 2 ) ;
+   ok = Middle ( ln ; 5 ; 1 ) = "-" and Middle ( ln ; 8 ; 1 ) = "-" and p2 > 0 ;
+   nm = If ( ok ; Trim ( Middle ( ln ; p1 + 1 ; p2 - p1 - 1 ) ) ) ;
+   v = If ( ok ; GetAsNumber ( LeftWords ( Middle ( ln ; p2 + 1 ; 200 ) ; 1 ) ) ) ;
+   d = Left ( ln ; 10 ) ;
+   hit = ok and nm = "Glucose" and not IsEmpty ( v ) and d > bd ;
+   bd = If ( hit ; d ; bd ) ;
+   bv = If ( hit ; v ; bv ) ;
+   i = i + 1 ] ;
+ bd & "|" & bv ) ;
+
+ins = While ( [ i = 1 ; bd = "" ; bv = "" ] ; i <= n ;
+ [ ln = GetValue ( src ; i ) ;
+   p1 = Position ( ln ; "|" ; 1 ; 1 ) ;
+   p2 = Position ( ln ; "|" ; 1 ; 2 ) ;
+   ok = Middle ( ln ; 5 ; 1 ) = "-" and Middle ( ln ; 8 ; 1 ) = "-" and p2 > 0 ;
+   nm = If ( ok ; Trim ( Middle ( ln ; p1 + 1 ; p2 - p1 - 1 ) ) ) ;
+   v = If ( ok ; GetAsNumber ( LeftWords ( Middle ( ln ; p2 + 1 ; 200 ) ; 1 ) ) ) ;
+   d = Left ( ln ; 10 ) ;
+   hit = ok and nm = "Insulin" and not IsEmpty ( v ) and d > bd ;
+   bd = If ( hit ; d ; bd ) ;
+   bv = If ( hit ; v ; bv ) ;
+   i = i + 1 ] ;
+ bd & "|" & bv ) ;
+
+ast = While ( [ i = 1 ; bd = "" ; bv = "" ] ; i <= n ;
+ [ ln = GetValue ( src ; i ) ;
+   p1 = Position ( ln ; "|" ; 1 ; 1 ) ;
+   p2 = Position ( ln ; "|" ; 1 ; 2 ) ;
+   ok = Middle ( ln ; 5 ; 1 ) = "-" and Middle ( ln ; 8 ; 1 ) = "-" and p2 > 0 ;
+   nm = If ( ok ; Trim ( Middle ( ln ; p1 + 1 ; p2 - p1 - 1 ) ) ) ;
+   v = If ( ok ; GetAsNumber ( LeftWords ( Middle ( ln ; p2 + 1 ; 200 ) ; 1 ) ) ) ;
+   d = Left ( ln ; 10 ) ;
+   hit = ok and ( nm = "AST (SGOT)" or nm = "AST" ) and not IsEmpty ( v ) and d > bd ;
+   bd = If ( hit ; d ; bd ) ;
+   bv = If ( hit ; v ; bv ) ;
+   i = i + 1 ] ;
+ bd & "|" & bv ) ;
+
+alt = While ( [ i = 1 ; bd = "" ; bv = "" ] ; i <= n ;
+ [ ln = GetValue ( src ; i ) ;
+   p1 = Position ( ln ; "|" ; 1 ; 1 ) ;
+   p2 = Position ( ln ; "|" ; 1 ; 2 ) ;
+   ok = Middle ( ln ; 5 ; 1 ) = "-" and Middle ( ln ; 8 ; 1 ) = "-" and p2 > 0 ;
+   nm = If ( ok ; Trim ( Middle ( ln ; p1 + 1 ; p2 - p1 - 1 ) ) ) ;
+   v = If ( ok ; GetAsNumber ( LeftWords ( Middle ( ln ; p2 + 1 ; 200 ) ; 1 ) ) ) ;
+   d = Left ( ln ; 10 ) ;
+   hit = ok and ( nm = "ALT (SGPT)" or nm = "ALT" ) and not IsEmpty ( v ) and d > bd ;
+   bd = If ( hit ; d ; bd ) ;
+   bv = If ( hit ; v ; bv ) ;
+   i = i + 1 ] ;
+ bd & "|" & bv ) ;
+
+plt = While ( [ i = 1 ; bd = "" ; bv = "" ] ; i <= n ;
+ [ ln = GetValue ( src ; i ) ;
+   p1 = Position ( ln ; "|" ; 1 ; 1 ) ;
+   p2 = Position ( ln ; "|" ; 1 ; 2 ) ;
+   ok = Middle ( ln ; 5 ; 1 ) = "-" and Middle ( ln ; 8 ; 1 ) = "-" and p2 > 0 ;
+   nm = If ( ok ; Trim ( Middle ( ln ; p1 + 1 ; p2 - p1 - 1 ) ) ) ;
+   v = If ( ok ; GetAsNumber ( LeftWords ( Middle ( ln ; p2 + 1 ; 200 ) ; 1 ) ) ) ;
+   d = Left ( ln ; 10 ) ;
+   hit = ok and ( nm = "Platelets" or nm = "Platelet Count" ) and not IsEmpty ( v ) and d > bd ;
+   bd = If ( hit ; d ; bd ) ;
+   bv = If ( hit ; v ; bv ) ;
+   i = i + 1 ] ;
+ bd & "|" & bv ) ;
+
+gD = GetValue ( Substitute ( g ; "|" ; ¶ ) ; 1 ) ;
+gV = GetAsNumber ( GetValue ( Substitute ( g ; "|" ; ¶ ) ; 2 ) ) ;
+iD = GetValue ( Substitute ( ins ; "|" ; ¶ ) ; 1 ) ;
+iV = GetAsNumber ( GetValue ( Substitute ( ins ; "|" ; ¶ ) ; 2 ) ) ;
+aD = GetValue ( Substitute ( ast ; "|" ; ¶ ) ; 1 ) ;
+aV = GetAsNumber ( GetValue ( Substitute ( ast ; "|" ; ¶ ) ; 2 ) ) ;
+lD = GetValue ( Substitute ( alt ; "|" ; ¶ ) ; 1 ) ;
+lV = GetAsNumber ( GetValue ( Substitute ( alt ; "|" ; ¶ ) ; 2 ) ) ;
+pD = GetValue ( Substitute ( plt ; "|" ; ¶ ) ; 1 ) ;
+pV = GetAsNumber ( GetValue ( Substitute ( plt ; "|" ; ¶ ) ; 2 ) ) ;
+
+homa = If ( gV > 0 and iV > 0 ; Truncate ( gV * iV / 405 ; 2 ) ) ;
+homaDate = If ( gD = iD ; gD ; gD & " / " & iD ) ;
+
+astDate = If ( not IsEmpty ( aD ) ;
+  Date ( Middle ( aD ; 6 ; 2 ) ; Middle ( aD ; 9 ; 2 ) ; Left ( aD ; 4 ) ) ) ;
+age = If ( not IsEmpty ( PT_DOB ) and not IsEmpty ( astDate ) ;
+  Year ( astDate ) - Year ( PT_DOB ) -
+  ( astDate < Date ( Month ( PT_DOB ) ; Day ( PT_DOB ) ; Year ( astDate ) ) ) ) ;
+fib = If ( aV > 0 and lV > 0 and pV > 0 and age > 0 ;
+  Round ( age * aV / ( pV * Sqrt ( lV ) ) ; 2 ) ) ;
+
+hFlag = Case (
+  homa < 1 ; "NORMAL (optimal insulin sensitivity)" ;
+  homa < 2 ; "NORMAL (healthy insulin sensitivity)" ;
+  homa < 3 ; "BORDERLINE (early insulin resistance)" ;
+  "ABNORMAL (significant insulin resistance)" ) ;
+
+fLow = If ( age >= 65 ; 2.0 ; 1.3 ) ;
+fFlag = Case (
+  fib < fLow ; "NORMAL (low risk of advanced fibrosis" & If ( age >= 65 ; ", age-adjusted cutoff 2.0" ; "" ) & ")" ;
+  fib <= 2.67 ; "INDETERMINATE (consider elastography)" ;
+  "ABNORMAL (high risk - consider hepatology referral)" ) ;
+
+hLine = If ( not IsEmpty ( homa ) ; "HOMA-IR: " & homa & " (" & homaDate & ") - " & hFlag ) ;
+fLine = If ( not IsEmpty ( fib ) ; "FIB-4: " & fib & " (" & aD & ") - " & fFlag )
+] ;
+If ( IsEmpty ( homa ) and IsEmpty ( fib ) ; "" ;
+  hLine & If ( not IsEmpty ( homa ) and not IsEmpty ( fib ) ; Char(13) ) & fLine )
+)

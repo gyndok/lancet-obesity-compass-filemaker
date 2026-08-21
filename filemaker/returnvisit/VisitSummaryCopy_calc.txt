@@ -1,0 +1,6 @@
+// VisitSummary Copy - 2026-08-21 - Doximity prompt field on Visits.
+// ScrubPHI'd visit summary + appended MetabolicFlags (HOMA-IR / FIB-4 from OM::Labsbefore).
+// Unstored Text calc on Visits. This is the field the RV app's Doximity prompt card pulls via SQL.
+ScrubPHI ( VisitSummary )  &
+
+If ( IsEmpty ( Obesity Management::MetabolicFlags ) ; "" ; Char ( 13 ) & Char ( 13 ) & "Metabolic Flags: " & Obesity Management::MetabolicFlags )
