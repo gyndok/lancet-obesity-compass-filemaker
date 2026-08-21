@@ -1,0 +1,214 @@
+/* OW-FM ow_app.js v1.0 - outreach worklist: LTFU / amber / labs queues + warm messages */
+var OWAPP = (function () {
+  var S = { queue: 'ltfu', filter: 'All', open: '', showContacted: false, drafts: {} };
+  var CTX = { today: '', pts: [], model: null };
+
+  function pd(s) { if (!s) { return null; }
+    var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) { return new Date(+m[1], +m[2] - 1, +m[3]).getTime(); }
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) { return new Date(+m[3], +m[1] - 1, +m[2]).getTime(); }
+    return null; }
+  function r1(x) { return Math.round(x * 10) / 10; }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function P(s) { if (!s || s === '?') { return []; } return s.split(/[\r\n]+/).filter(function (x) { return x.length > 0; }); }
+  function daysAgo(now, ms) { return Math.floor((now - ms) / 86400000); }
+  function fmtD(ms) { if (ms == null) { return '-'; } var d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear(); }
+  function classifyRx(rx) { var s = (rx || '').toLowerCase();
+    if (!s.replace(/\s/g, '')) { return 'None'; }
+    if (s.indexOf('tirzep') >= 0 || s.indexOf('zepbound') >= 0 || s.indexOf('mounjaro') >= 0) { return 'Tirzepatide'; }
+    if (s.indexOf('semaglut') >= 0 || s.indexOf('wegovy') >= 0 || s.indexOf('ozempic') >= 0 || s.indexOf('rybelsus') >= 0) { return 'Semaglutide'; }
+    if (s.indexOf('orforglipron') >= 0) { return 'Orforglipron'; }
+    if (s.indexOf('liraglut') >= 0 || s.indexOf('saxenda') >= 0) { return 'Liraglutide'; }
+    if (s.indexOf('qsymia') >= 0 || (s.indexOf('phenterm') >= 0 && s.indexOf('topiramate') >= 0)) { return 'Qsymia'; }
+    if (s.indexOf('phenterm') >= 0) { return 'Phentermine'; }
+    if (s.indexOf('contrave') >= 0 || s.indexOf('naltrex') >= 0) { return 'Contrave'; }
+    if (s.indexOf('metform') >= 0) { return 'Metformin'; }
+    if (s.indexOf('orlistat') >= 0 || s.indexOf('xenical') >= 0) { return 'Orlistat'; }
+    return 'Other'; }
+
+  /* ---------- model (node-testable) ---------- */
+  function buildModel(fb) {
+    var now = pd(fb.today) || Date.now();
+    var pts = {}, order = [];
+    P(fb.pts).forEach(function (r) { var p = r.split('|'); var a = (p[0] || '').trim(); if (!a) { return; }
+      pts[a] = { acct: a, last: p[1] || '', first: (p[2] || '').trim(), status: (p[3] || '').trim(),
+        clinic: (p[4] || '').trim(), target: parseFloat(p[5]) || null, startW: parseFloat(p[6]) || null,
+        phone: (p[7] || '').trim(), email: (p[8] || '').trim(), dob: pd(p[9]), outreach: pd(p[10]),
+        rx: p.slice(11).join('|'), wt: [], vis: [], labs: [] };
+      order.push(a); });
+    P(fb.wt).forEach(function (r) { var p = r.split('|'); var o = pts[(p[0] || '').trim()]; if (!o) { return; }
+      var t = pd(p[1]), w = parseFloat(p[2]); if (t && w > 0) { o.wt.push({ t: t, w: w }); } });
+    P(fb.vis).forEach(function (r) { var p = r.split('|'); var o = pts[(p[0] || '').trim()]; if (!o) { return; }
+      var t = pd(p[1]); if (t) { o.vis.push({ t: t, rtc: p.slice(2).join('|') }); } });
+    P(fb.labs).forEach(function (r) { var p = r.split('|'); var o = pts[(p[0] || '').trim()]; if (!o) { return; }
+      var t = pd(p[1]); if (t) { o.labs.push(t); } });
+    order.forEach(function (a) { var o = pts[a];
+      o.wt.sort(function (x, y) { return x.t - y.t; });
+      o.vis.sort(function (x, y) { return x.t - y.t; });
+      o.tbwl = null; o.lastW = null; o.lastWT = null;
+      if (o.wt.length > 0) {
+        o.lastW = o.wt[o.wt.length - 1].w; o.lastWT = o.wt[o.wt.length - 1].t;
+        if (o.wt.length >= 2) { o.tbwl = r1((o.wt[0].w - o.lastW) / o.wt[0].w * 100); } }
+      var lv = o.vis.length ? o.vis[o.vis.length - 1].t : null;
+      o.rtc = o.vis.length ? o.vis[o.vis.length - 1].rtc : '';
+      o.lastVisitT = lv;
+      o.lastContact = null;
+      if (o.lastWT != null) { o.lastContact = o.lastWT; }
+      if (lv != null && (o.lastContact == null || lv > o.lastContact)) { o.lastContact = lv; }
+      o.daysSince = (o.lastContact != null) ? daysAgo(now, o.lastContact) : null;
+      var ll = null; o.labs.forEach(function (t) { if (ll == null || t > ll) { ll = t; } });
+      o.lastLab = ll; o.labDays = (ll != null) ? daysAgo(now, ll) : null;
+      o.age = (o.dob != null) ? Math.floor((now - o.dob) / 31557600000) : null;
+      o.aom = classifyRx(o.rx);
+      /* never auto-reflag: contacted = outreach on/after last contact */
+      o.contacted = (o.outreach != null) && (o.lastContact == null || o.outreach >= o.lastContact); });
+    return { pts: pts, order: order, now: now };
+  }
+  function selectPanel(M) { var act = [], fb2 = [];
+    M.order.forEach(function (a) { var o = M.pts[a];
+      if (o.status.toLowerCase() === 'active') { act.push(o); }
+      if (o.daysSince != null && o.daysSince <= 365) { fb2.push(o); } });
+    if (act.length > 0) { return { list: act, fallback: false }; }
+    return { list: fb2, fallback: true }; }
+  function queues(list) {
+    var q = { ltfu: [], amber: [], labs: [], contacted: [] };
+    list.forEach(function (o) {
+      if (o.contacted) { q.contacted.push(o); return; }
+      if (o.daysSince == null || o.daysSince > 122) { q.ltfu.push(o); }
+      else if (o.daysSince >= 91) { q.amber.push(o); }
+      if (o.aom !== 'None' && (o.labDays == null || o.labDays > 365)) { q.labs.push(o); } });
+    function ns(v) { return (v == null) ? 999999 : v; }
+    q.ltfu.sort(function (x, y) { return ns(y.daysSince) - ns(x.daysSince); });
+    q.amber.sort(function (x, y) { return y.daysSince - x.daysSince; });
+    q.labs.sort(function (x, y) { return ns(y.labDays) - ns(x.labDays); });
+    q.contacted.sort(function (x, y) { return (y.outreach || 0) - (x.outreach || 0); });
+    return q;
+  }
+
+  /* ---------- messages (node-testable) ---------- */
+  function compose(o, queue) {
+    var L = [];
+    L.push('Hi ' + (o.first || 'there') + ', it\'s Dr. Klein.');
+    var mo = (o.daysSince != null) ? Math.round(o.daysSince / 30) : null;
+    var prog = '';
+    if (o.tbwl != null && o.tbwl > 0) {
+      var lost = o.startW && o.lastW ? r1(o.startW - o.lastW) : null;
+      prog = 'You were down ' + (lost != null ? lost + ' lbs (' + o.tbwl + '% of your starting weight)' : o.tbwl + '% from your starting weight') + ' as of your last check-in - that progress is worth protecting.';
+    }
+    if (queue === 'labs') {
+      if (o.labDays == null) { L.push('I do not have any labs on file for you, and I like to check a set at least yearly while you are on ' + (o.aom !== 'None' ? o.aom.toLowerCase() : 'medication') + '.'); }
+      else { L.push('Your labs on file are about ' + Math.round(o.labDays / 30) + ' months old, and I like to recheck a set at least yearly while you are on ' + (o.aom !== 'None' ? o.aom.toLowerCase() : 'medication') + '.'); }
+      L.push('If you have had labs done elsewhere, forward them to me - otherwise let me know and I will send an order. Nothing fancy: metabolic panel, A1c, lipids.');
+    } else {
+      L.push('I have not seen a weight from you in ' + (mo != null && mo >= 2 ? 'about ' + mo + ' months' : 'a while') + ' and I wanted to check in - how are things going?');
+      if (prog) { L.push(prog); }
+      if (o.clinic === 'Mochi') {
+        L.push('When you get a minute, reply with a current weight, and let\'s get a video visit on the calendar so we can keep things moving.');
+      } else {
+        L.push('When you get a minute, give the office a call and we will get you scheduled for a follow-up visit.');
+      }
+      if (o.aom !== 'None' && (o.labDays == null || o.labDays > 365)) {
+        L.push('It is also time for a fresh set of labs - I can send an order whenever you are ready.');
+      }
+    }
+    if (o.age != null && o.age >= 60 && o.tbwl != null && o.tbwl > 0) {
+      L.push('One more thing - at ' + o.age + ', protecting muscle matters as much as the number on the scale. Protein at every meal and strength training twice a week.');
+    }
+    L.push('Talk soon.');
+    return L.join('\n');
+  }
+
+  /* ---------- DOM ---------- */
+  function el(id) { return (typeof document === 'undefined') ? null : document.getElementById(id); }
+  function mark(acct, queue) {
+    if (typeof FileMaker !== 'undefined' && FileMaker.PerformScriptWithOption) {
+      FileMaker.PerformScriptWithOption('MarkOutreach', JSON.stringify({ acct: acct, queue: queue }), '0');
+      return true; }
+    var d = el('out'); if (d) { d.textContent = JSON.stringify({ acct: acct, queue: queue }); }
+    return false; }
+  function copyText(text, btn) {
+    var ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    if (btn) { btn.textContent = 'Copied'; } }
+  function chipRow(base) {
+    var cW = base.filter(function (o) { return o.clinic === 'WSOC'; }).length;
+    var cM = base.filter(function (o) { return o.clinic === 'Mochi'; }).length;
+    var mk = function (n, c) { return '<button class="chip' + ((S.filter === n) ? ' on' : '') + '" data-f="' + n + '">' + n + ' (' + c + ')</button>'; };
+    return mk('All', base.length) + mk('WSOC', cW) + mk('Mochi', cM); }
+  function renderAll() {
+    if (typeof document === 'undefined') { return; }
+    var M = CTX.model;
+    var pan = selectPanel(M);
+    var base = pan.list;
+    var list = (S.filter === 'All') ? base : base.filter(function (o) { return o.clinic === S.filter; });
+    var Q = queues(list);
+    el('chips').innerHTML = chipRow(base) +
+      (pan.fallback ? '<span class="fb">Status field empty - any contact within 12 months</span>' : '');
+    var tabs = [['ltfu', 'LTFU >122d', Q.ltfu.length], ['amber', 'Amber 91-122d', Q.amber.length], ['labs', 'Labs aging', Q.labs.length]];
+    el('tabs').innerHTML = tabs.map(function (t) {
+      return '<button class="tab' + (S.queue === t[0] ? ' on' : '') + '" data-q="' + t[0] + '">' + t[1] + ' <span class="n">' + t[2] + '</span></button>'; }).join('') +
+      '<button class="tab ghost' + (S.showContacted ? ' on' : '') + '" data-q="contacted">Contacted <span class="n">' + Q.contacted.length + '</span></button>';
+    var rows = S.showContacted ? Q.contacted : Q[S.queue];
+    var h = '';
+    if (!rows.length) { h = '<div class="clear">Queue clear.</div>'; }
+    rows.forEach(function (o) {
+      var open = (S.open === o.acct);
+      var badge = (o.clinic === 'Mochi') ? '<span class=bdg-m>Mochi</span>' : ((o.clinic === 'WSOC') ? '<span class=bdg-w>WSOC</span>' : '');
+      var meta = S.showContacted ?
+        'contacted ' + fmtD(o.outreach) :
+        (S.queue === 'labs' ? ((o.labDays == null) ? 'no labs ever' : 'labs ' + o.labDays + 'd old') :
+          ((o.daysSince == null) ? 'no contact recorded' : o.daysSince + 'd since contact'));
+      h += '<div class="row' + (open ? ' open' : '') + '" data-a="' + esc(o.acct) + '">' +
+        '<div class="rhead" data-open="' + esc(o.acct) + '">' +
+        '<a class="pl" href="fmp://$/Obesity%20Management?script=GoToPatient&param=' + encodeURIComponent(o.acct) + '">' + esc(o.last) + ', ' + esc(o.first) + '</a> ' + badge +
+        '<span class="meta">' + esc(meta) + '</span>' +
+        '<span class="meta2">' + (o.tbwl != null ? o.tbwl + '% TBWL' : '') + (o.rtc ? ' &middot; told: ' + esc(o.rtc) : '') + '</span>' +
+        '</div>';
+      if (open && !S.showContacted) {
+        var msg = S.drafts[o.acct] != null ? S.drafts[o.acct] : compose(o, S.queue);
+        h += '<div class="rbody">' +
+          '<div class="ct">' + (o.phone ? 'Phone: ' + esc(o.phone) : 'No phone on file') + (o.email ? ' &middot; ' + esc(o.email) : '') +
+          ' &middot; Last contact: ' + fmtD(o.lastContact) + '</div>' +
+          '<textarea class="msg" data-msg="' + esc(o.acct) + '" rows="9">' + esc(msg) + '</textarea>' +
+          '<div class="btns"><button class="selall" data-copy="' + esc(o.acct) + '">Copy message</button>' +
+          '<button class="selall go" data-mark="' + esc(o.acct) + '">Mark contacted</button></div></div>';
+      }
+      h += '</div>'; });
+    el('main').innerHTML = h;
+    el('foot').textContent = 'OutreachWorklist v1.0 - ' + rows.length + ' in view';
+    wire();
+  }
+  function wire() {
+    document.querySelectorAll('[data-f]').forEach(function (n) {
+      n.onclick = function () { S.filter = n.getAttribute('data-f'); S.open = ''; renderAll(); }; });
+    document.querySelectorAll('[data-q]').forEach(function (n) {
+      n.onclick = function () { var q = n.getAttribute('data-q');
+        if (q === 'contacted') { S.showContacted = !S.showContacted; }
+        else { S.queue = q; S.showContacted = false; }
+        S.open = ''; renderAll(); }; });
+    document.querySelectorAll('[data-open]').forEach(function (n) {
+      n.onclick = function (e) { if (e.target.tagName === 'A') { return; }
+        var a = n.getAttribute('data-open'); S.open = (S.open === a) ? '' : a; renderAll(); }; });
+    document.querySelectorAll('[data-msg]').forEach(function (n) {
+      n.oninput = function () { S.drafts[n.getAttribute('data-msg')] = n.value; }; });
+    document.querySelectorAll('[data-copy]').forEach(function (n) {
+      n.onclick = function () { var a = n.getAttribute('data-copy');
+        var ta = document.querySelector('[data-msg="' + a + '"]');
+        copyText(ta ? ta.value : '', n); }; });
+    document.querySelectorAll('[data-mark]').forEach(function (n) {
+      n.onclick = function () { var a = n.getAttribute('data-mark');
+        n.textContent = 'Saving...'; mark(a, S.queue); }; });
+  }
+  function boot(fb) {
+    CTX.today = fb.today || '';
+    CTX.model = buildModel(fb);
+    renderAll();
+  }
+  return { S: S, CTX: CTX, pd: pd, classifyRx: classifyRx, buildModel: buildModel,
+    selectPanel: selectPanel, queues: queues, compose: compose, boot: boot, renderAll: renderAll };
+})();
+if (typeof module !== 'undefined') { module.exports = OWAPP; }
+
+var OW_APP_VERSION="1.0";
