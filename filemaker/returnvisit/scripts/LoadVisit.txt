@@ -1,0 +1,12 @@
+Set Error Capture [ On ]
+If [ Get ( ScriptParameter ) = "TODAY" ]
+Set Field [ Globals::RVSelectedDate; "" ]
+Else [  ]
+Set Field [ Globals::RVSelectedDate; Let ( [ p = Get ( ScriptParameter ) ] ;
+If ( PatternCount ( p ; "-" ) > 0 ;
+  Date ( Middle ( p ; 6 ; 2 ) ; Middle ( p ; 9 ; 2 ) ; Left ( p ; 4 ) ) ;
+  GetAsDate ( p ) ) ) ]
+End If
+Commit Records/Requests
+[ No dialog ]
+Refresh Object [ Object Name: "rvviewer"; Repetition: 1 ]

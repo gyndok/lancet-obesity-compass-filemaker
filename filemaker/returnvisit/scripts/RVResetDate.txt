@@ -1,0 +1,5 @@
+Set Error Capture [ On ]
+If [ not IsEmpty ( Globals::RVSelectedDate ) ]
+Set Field [ Globals::RVSelectedDate; "" ]
+Refresh Object [ Object Name: "rvviewer"; Repetition: 1 ]
+End If

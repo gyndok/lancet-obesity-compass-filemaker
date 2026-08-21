@@ -1,0 +1,152 @@
+// ReturnVisit_Full v1.7 - 2026-08-20 (carry ProblemList into MDM upfront) - return visit app with visit-date rail navigation. Unstored Text calc
+// on Obesity Management. App source from Code Library record RVApp via ExecuteSQL.
+// Context prefill via JSONSetElement (handles quotes/returns safely) + Base64 transport.
+// Rail: Globals::RVSelectedDate (global Date) picks the visit; empty = today. LoadVisit script
+// sets it and refreshes the viewer object. Edit block loads via per-field ExecuteSQL (single-value
+// queries preserve returns; JSONSetElement escapes).
+// Save: web viewer calls FileMaker script "SaveReturnVisit" with JSON parameter.
+Let ( [
+app = ExecuteSQL ( "SELECT Source FROM \"Code Library\" WHERE Name=?" ; "" ; "" ; "RVApp" ) ;
+guard = IsEmpty ( app ) or app = "?" ;
+age = Year ( Get ( CurrentDate ) ) - Year ( PT_DOB ) - ( Get ( CurrentDate ) < Date ( Month ( PT_DOB ) ; Day ( PT_DOB ) ; Year ( Get ( CurrentDate ) ) ) ) ;
+selDate = If ( IsEmpty ( Globals::RVSelectedDate ) ; Get ( CurrentDate ) ; Globals::RVSelectedDate ) ;
+isToday = ( selDate = Get ( CurrentDate ) ) ;
+visitList = ExecuteSQL ( "SELECT \"Date\", Weightpounds FROM Visits WHERE AccountNumber=? ORDER BY \"Date\" DESC" ; "|" ; ¶ ; AccountNumber ) ;
+hasSel = GetAsBoolean ( ExecuteSQL ( "SELECT COUNT(*) FROM Visits WHERE AccountNumber=? AND \"Date\"=?" ; "" ; "" ; AccountNumber ; selDate ) ) ;
+editToday = hasSel ;
+refRow = ExecuteSQL ( "SELECT \"Date\", Weightpounds, WaistCircumferenceInches, HipCircumference FROM Visits WHERE AccountNumber=? AND \"Date\"<? ORDER BY \"Date\" DESC FETCH FIRST 1 ROWS ONLY" ; "|" ; ¶ ; AccountNumber ; selDate ) ;
+refDate = GetValue ( Substitute ( refRow ; "|" ; ¶ ) ; 1 ) ;
+refW = GetValue ( Substitute ( refRow ; "|" ; ¶ ) ; 2 ) ;
+refWaist = GetValue ( Substitute ( refRow ; "|" ; ¶ ) ; 3 ) ;
+refHip = GetValue ( Substitute ( refRow ; "|" ; ¶ ) ; 4 ) ;
+vq = "SELECT " ;
+vw = " FROM Visits WHERE AccountNumber=? AND \"Date\"=?" ;
+cm = ExecuteSQL ( "SELECT MedicationReview FROM Visits WHERE AccountNumber=? ORDER BY \"Date\" DESC FETCH FIRST 1 ROWS ONLY" ; "" ; "" ; AccountNumber ) ;
+cg = ExecuteSQL ( "SELECT GoalSetting FROM Visits WHERE AccountNumber=? ORDER BY \"Date\" DESC FETCH FIRST 1 ROWS ONLY" ; "" ; "" ; AccountNumber ) ;
+labTxt = DaysSinceLabs ;
+ld = Case ( labTxt = "Today" ; 0 ; GetAsNumber ( labTxt ) ) ;
+ctx = JSONSetElement ( "{}" ;
+ [ "acct" ; GetAsText ( AccountNumber ) ; JSONString ] ;
+ [ "name" ; lnameFname ; JSONString ] ;
+ [ "age" ; age ; JSONNumber ] ;
+ [ "heightIn" ; HeightCalculated ; JSONNumber ] ;
+ [ "startW" ; Weightpounds ; JSONNumber ] ;
+ [ "targetW" ; TargetWeight ; JSONNumber ] ;
+ [ "rx" ; Prescription ; JSONString ] ;
+ [ "today" ; GetAsText ( Get ( CurrentDate ) ) ; JSONString ] ;
+ [ "lastDateStr" ; refDate ; JSONString ] ;
+ [ "lastW" ; GetAsNumber ( refW ) ; JSONNumber ] ;
+ [ "lastWaist" ; GetAsNumber ( refWaist ) ; JSONNumber ] ;
+ [ "lastHip" ; GetAsNumber ( refHip ) ; JSONNumber ] ;
+ [ "selDate" ; GetAsText ( selDate ) ; JSONString ] ;
+ [ "isToday" ; If ( isToday ; 1 ; 0 ) ; JSONNumber ] ;
+ [ "visitList" ; visitList ; JSONString ] ;
+ [ "labsDays" ; ld ; If ( IsEmpty ( labTxt ) ; JSONNull ; JSONNumber ) ] ;
+ [ "rtc" ; Last ( Visits::returntoclinic ) ; JSONString ] ) ;
+ctxA = Case (
+ hasSel and not isToday ;
+ JSONSetElement ( ctx ; [ "aiNote" ; ExecuteSQL ( vq & "AIPasteModified" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ) ;
+ isToday and not hasSel ;
+ JSONSetElement ( ctx ;
+  [ "carry.MedicationReview" ; cm & If ( IsEmpty ( cg ) ; "" ; Char(13) & Char(13) & cg ) ; JSONString ] ;
+  [ "carry.ReferringMD" ; referringMD ; JSONString ] ;
+  [ "carry.LabResults" ; List ( Labs::Labs ) ; JSONString ] ;
+  [ "carry.MDM" ; ProblemList ; JSONString ] ) ;
+ ctx ) ;
+ctx2 = If ( not ( hasSel and isToday ) ; ctxA ;
+ JSONSetElement ( ctx ;
+  [ "prompt" ; ExecuteSQL ( vq & "\"VisitSummary Copy\"" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "aiNote" ; ExecuteSQL ( vq & "AIPasteModified" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.Weightpounds" ; GetAsNumber ( ExecuteSQL ( vq & "Weightpounds" & vw ; "" ; "" ; AccountNumber ; selDate ) ) ; JSONNumber ] ;
+  [ "edit.BloodPressureSystolic" ; GetAsNumber ( ExecuteSQL ( vq & "BloodPressureSystolic" & vw ; "" ; "" ; AccountNumber ; selDate ) ) ; JSONNumber ] ;
+  [ "edit.BloodPressureDiastolic" ; GetAsNumber ( ExecuteSQL ( vq & "BloodPressureDiastolic" & vw ; "" ; "" ; AccountNumber ; selDate ) ) ; JSONNumber ] ;
+  [ "edit.Pulse" ; GetAsNumber ( ExecuteSQL ( vq & "Pulse" & vw ; "" ; "" ; AccountNumber ; selDate ) ) ; JSONNumber ] ;
+  [ "edit.WaistCircumferenceInches" ; GetAsNumber ( ExecuteSQL ( vq & "WaistCircumferenceInches" & vw ; "" ; "" ; AccountNumber ; selDate ) ) ; JSONNumber ] ;
+  [ "edit.NeckCircumferenceInches" ; GetAsNumber ( ExecuteSQL ( vq & "NeckCircumferenceInches" & vw ; "" ; "" ; AccountNumber ; selDate ) ) ; JSONNumber ] ;
+  [ "edit.HipCircumference" ; GetAsNumber ( ExecuteSQL ( vq & "HipCircumference" & vw ; "" ; "" ; AccountNumber ; selDate ) ) ; JSONNumber ] ;
+  [ "edit.gripStrenth" ; GetAsNumber ( ExecuteSQL ( vq & "\"grip strenth\"" & vw ; "" ; "" ; AccountNumber ; selDate ) ) ; JSONNumber ] ;
+  [ "edit.PatientReported" ; ExecuteSQL ( vq & "PatientReported" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.DietaryHabits" ; ExecuteSQL ( vq & "DietaryHabits" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.PhysicalActivity" ; ExecuteSQL ( vq & "PhysicalActivity" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.BehavioralChanges" ; ExecuteSQL ( vq & "BehavioralChanges" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.MedicationReview" ; ExecuteSQL ( vq & "MedicationReview" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.LabResults" ; ExecuteSQL ( vq & "LabResults" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.FastingInsulin" ; GetAsNumber ( ExecuteSQL ( vq & "FastingInsulin" & vw ; "" ; "" ; AccountNumber ; selDate ) ) ; JSONNumber ] ;
+  [ "edit.FastingGlucose" ; GetAsNumber ( ExecuteSQL ( vq & "FastingGlucose" & vw ; "" ; "" ; AccountNumber ; selDate ) ) ; JSONNumber ] ;
+  [ "edit.GoalSetting" ; ExecuteSQL ( vq & "GoalSetting" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.MDM" ; ExecuteSQL ( vq & "MDM" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.returntoclinic" ; ExecuteSQL ( vq & "returntoclinic" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.ReferringMD" ; ExecuteSQL ( vq & "ReferringMD" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ;
+  [ "edit.includePrompt" ; ExecuteSQL ( vq & "includePrompt" & vw ; "" ; "" ; AccountNumber ; selDate ) ; JSONString ] ) ) ;
+boot = Substitute ( Base64Encode ( ctx2 ) ; [ Char(13) ; "" ] ; [ Char(10) ; "" ] )
+] ;
+If ( guard ;
+"<!DOCTYPE html><html><body style='font-family:sans-serif;padding:30px;color:#b91c1c'>ReturnVisit app source missing. Check Code Library record: RVApp.</body></html>" ;
+
+"<!DOCTYPE html><html><head><meta charset='utf-8'><style>" &
+"*{box-sizing:border-box}" &
+"body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#f6f1e7;color:#2b2b26;margin:0;display:flex;min-height:100vh}" &
+"#rail{width:150px;min-width:150px;background:#fff;border-right:1px solid #e3d8c2;padding:12px 8px;position:sticky;top:0;height:100vh;overflow-y:auto}" &
+"#rail .rl{font-size:12px;color:#5c5342;padding:5px 8px;border-radius:6px;margin-bottom:2px;cursor:pointer}" &
+"#rail .rl:hover{background:#efe7d4;color:#0e5c4a}" &
+"#rail .rl.on{background:#0e5c4a;color:#fff}" &
+"#rail .rw{opacity:.65;font-size:11px}" &
+"#wrap{flex:1;max-width:900px;padding:0 24px 60px}" &
+"#hdr{position:sticky;top:0;background:#f6f1e7;padding:12px 0 10px;border-bottom:1px solid #e3d8c2;z-index:5}" &
+"#hdr h1{margin:0;font-size:18px;color:#0e5c4a}" &
+"#hdr-demo{color:#7a6a4f;font-size:13px;margin-top:3px}" &
+"#hdr-ctx{color:#5c5342;font-size:12.5px;margin-top:4px}" &
+".edit{color:#b45309;font-weight:600}" &
+"#chips{margin-top:8px;min-height:24px}" &
+".chip{display:inline-block;font-size:12px;border-radius:12px;padding:3px 10px;background:#fff;border:1px solid #e3d8c2;margin:0 6px 4px 0}" &
+".chip.ok{color:#5c5342}" &
+".chip.good{color:#15803d;border-color:#15803d;font-weight:600}" &
+".chip.mid{color:#b45309;border-color:#b45309}" &
+".chip.warn{color:#b91c1c;border-color:#b91c1c;font-weight:600}" &
+".sec{margin-top:22px}" &
+".sec h2{font-size:15px;color:#0e5c4a;border-bottom:1px solid #e3d8c2;padding-bottom:5px}" &
+".q{background:#fff;border:1px solid #e3d8c2;border-radius:9px;padding:11px 14px;margin:10px 0}" &
+".qt{font-size:13px;font-weight:600}" &
+".qd{font-size:11.5px;color:#7a6a4f;margin-top:2px}" &
+".qi{margin-top:8px}" &
+".qi textarea,.qi input[type=text]{width:100%;padding:6px 8px;border:1px solid #c9b98f;border-radius:6px;font:inherit}" &
+".qi input[type=number]{width:130px;padding:6px 8px;border:1px solid #c9b98f;border-radius:6px}" &
+".row3{display:flex;gap:12px;margin:10px 0}" &
+".cell{flex:1;background:#fff;border:1px solid #e3d8c2;border-radius:9px;padding:10px 14px}" &
+".cell .qt{margin-bottom:6px}" &
+".cell input{width:100%;padding:6px 8px;border:1px solid #c9b98f;border-radius:6px}" &
+".opt{display:inline-block;font-size:13px;padding:3px 14px 3px 0;cursor:pointer}" &
+".opt.cmp{display:block;margin-top:6px;font-weight:600}" &
+".tg{margin:14px 0}" &
+".tgbtn{background:#efe7d4;border:1px solid #d9c7a7;color:#5c5342;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;width:100%;text-align:left}" &
+".tg.open .tgbtn{background:#0e5c4a;border-color:#0e5c4a;color:#fff}" &
+".tgn{font-weight:400;opacity:.75}" &
+".tgbody{border:1px solid #e3d8c2;border-top:0;border-radius:0 0 9px 9px;padding:4px 10px;background:#fbf8f1}" &
+"#footer{margin-top:26px;display:flex;gap:10px}" &
+"#footer button{background:#0e5c4a;color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:14px;cursor:pointer}" &
+".note{white-space:pre-wrap;font-size:13.5px;line-height:1.55;margin-top:10px;word-break:break-word}" &
+"#out{background:#fff;border:1px solid #e3d8c2;border-radius:9px;padding:12px;margin-top:12px;font-size:12px;white-space:pre-wrap;word-break:break-word}" &
+"</style></head><body>" &
+"<div id='rail'></div>" &
+"<div id='wrap'>" &
+"<div id='hdr'>" &
+"<h1>Return Visit</h1>" &
+"<div id='hdr-demo'></div>" &
+"<div id='hdr-ctx'></div>" &
+"<div id='chips'></div>" &
+"</div>" &
+"<div id='main'></div>" &
+"<div id='footer'><button id='btn-save'>Save Visit</button></div>" &
+"<div id='out'></div>" &
+"</div>" &
+"<script>window.__rvboot=[1];</script>" &
+"<script>" & app & "</script>" &
+"<script>window.__rvboot.push(2);</script>" &
+"<script>" &
+"var RVB='" & boot & "';" &
+"function b64u(s){var t=new TextDecoder().decode(Uint8Array.from(atob(s),function(c){return c.charCodeAt(0);}));" &
+"return t.replace(/[ -]/g,function(c){return c===String.fromCharCode(11)?String.fromCharCode(92)+String.fromCharCode(110):String.fromCharCode(32);});}" &
+"try{var fb=JSON.parse(b64u(RVB));RVAPP.boot(fb);}catch(e){document.body.innerHTML='<div style=padding:30px;color:#b91c1c>Boot failed: '+e.message+' (markers: '+JSON.stringify(window.__rvboot)+')</div>';}" &
+"</script>" &
+"</body></html>"
+) )

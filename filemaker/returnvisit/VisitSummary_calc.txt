@@ -1,0 +1,145 @@
+Let ([
+  // ---------- prompt selection ----------
+  ~inc    = Trim ( Substitute ( includePrompt ; [ Char(13) ; "" ] ; [ Char(10) ; "" ] ) ) ;
+  ~clinic = Trim ( Substitute ( Obesity Management::Clinic ; [ Char(13) ; "" ] ; [ Char(10) ; "" ] ) ) ;
+  ~p      = If ( ~inc = "Yes" ;
+                 If ( ~clinic = "Mochi" ; MochiFollowUpPrompt ; Prompt ) ) ;
+
+  // ---------- progress to goal ----------
+  ~start = GetAsNumber ( Obesity Management::Weightpounds ) ;
+  ~goal  = GetAsNumber ( Obesity Management::TargetWeight ) ;
+  ~span  = ~start - ~goal ;
+  ~pctText = If ( ~span > 0 and Weightpounds > 0 ;
+    "Progress to goal: " & Min ( 100 ; Round ( 100 * ( ~start - Weightpounds ) / ~span ; 0 ) ) &
+    "% of the way from " & ~start & " lbs to " & ~goal & " lbs" & Char(13) ) ;
+
+  // ---------- energy target ----------
+  ~fem   = Obesity Management::Gender = "Female" ;
+  ~floor = If ( ~fem ; 1200 ; 1500 ) ;
+  ~rmr = Case (
+    BC_Basal_Metabolic_Rate > 0 ; BC_Basal_Metabolic_Rate ;
+    Obesity Management::BIABasalMetabolicRate > 0 ; Obesity Management::BIABasalMetabolicRate ;
+    Obesity Management::Mifflin > 0 ; Obesity Management::Mifflin ; 0 ) ;
+  ~rmrSrc = Case (
+    BC_Basal_Metabolic_Rate > 0 ; "measured this visit" ;
+    Obesity Management::BIABasalMetabolicRate > 0 ; "measured, prior scan" ;
+    Obesity Management::Mifflin > 0 ; "Mifflin-St Jeor estimate" ; "" ) ;
+  ~calText = If ( ~rmr > 0 ;
+    "Calorie target: " & Max ( ~rmr - 500 ; ~floor ) & " kcal/day (RMR " & ~rmr & ", " &
+      ~rmrSrc & ", less 500, floor " & ~floor & ")" & Char(13) ;
+    "Calorie target: " & If ( ~fem ; "1200 to 1500" ; "1500 to 1800" ) &
+      " kcal/day (no RMR on file)" & Char(13) ) ;
+
+  // ---------- derived block ----------
+  ~derived =
+    "DERIVED VALUES (precalculated, use verbatim, do not recompute)" & Char(13) &
+    If ( not IsEmpty ( Obesity Management::waisttoheight interpretation ) ;
+         Obesity Management::waisttoheight interpretation & Char(13) ) &
+    ~pctText &
+    If ( Obesity Management::proteinIntake > 0 ;
+         "Protein target: " & Obesity Management::proteinIntake & " g/day (1.2 g/kg)" & Char(13) ) &
+    ~calText &
+    If ( not IsEmpty ( deltawaist ) ; "Waist change since intake: " & deltawaist & " in" & Char(13) ) &
+    If ( not IsEmpty ( deltahips ) ;  "Hip change since intake: "   & deltahips  & " in" & Char(13) ) &
+    If ( not IsEmpty ( Obesity Management::DaysSinceLabs ) ;
+         "Last labs: " & Obesity Management::DaysSinceLabs & " ago (routine interval 6 months)" & Char(13) ;
+         "Last labs: no dated result on file" & Char(13) ) &
+    If ( not IsEmpty ( ReferringMD ) ;
+         "Referring physician: " & ReferringMD & Char(13) ;
+         If ( not IsEmpty ( Obesity Management::referringMD ) ;
+              "Referring physician: " & Obesity Management::referringMD & Char(13) ;
+              "Referring physician: none on record" & Char(13) ) ) &
+    If ( not IsEmpty ( Obesity Management::ContraIndications ) ;
+         "Contraindications on file: " & Obesity Management::ContraIndications & Char(13) ) &
+    Char(13) ;
+
+  // ---------- grouped sections ----------
+  ~bodyComp =
+    If ( BC_Skeletal_Muscle_Mass_lb > 0 ; "Skeletal muscle mass: " & BC_Skeletal_Muscle_Mass_lb & " lbs" & Char(13) ) &
+    If ( BC_Body_Fat_Mass_lb > 0 ;        "Body fat mass: " & BC_Body_Fat_Mass_lb & " lbs" & Char(13) ) &
+    If ( BC_Percent_Fat > 0 ;             "Body fat: " & BC_Percent_Fat & "%" & Char(13) ) &
+    If ( BC_Basal_Metabolic_Rate > 0 ;    "Measured RMR: " & BC_Basal_Metabolic_Rate & " kcal" & Char(13) ) ;
+
+  ~metabolic =
+    If ( FastingGlucose > 0 ; "Fasting glucose: " & FastingGlucose & " mg/dL" & Char(13) ) &
+    If ( FastingInsulin > 0 ; "Fasting insulin: " & FastingInsulin & " uIU/mL" & Char(13) ) &
+    If ( HOMA IR > 0 ; "HOMA-IR: " & HOMA IR & " (" & HOMA IR Value & ")" & Char(13) ) ;
+
+  ~repro = If ( ~fem ;
+    If ( not IsEmpty ( Obesity Management::Contraception ) ;      "Contraception: " & Obesity Management::Contraception & Char(13) ) &
+    If ( not IsEmpty ( Obesity Management::DesireforPregnancy ) ; "Desire for pregnancy: " & Obesity Management::DesireforPregnancy & Char(13) ) &
+    If ( not IsEmpty ( Obesity Management::Menopause ) ;          "Menopause: " & Obesity Management::Menopause & Char(13) ) &
+    If ( not IsEmpty ( Obesity Management::Breastfeeding ) ;      "Breastfeeding: " & Obesity Management::Breastfeeding & Char(13) ) )
+];
+
+If ( not IsEmpty ( ~p ) ; ~p & Char(13) & Char(13) ) &
+
+~derived &
+
+"Current Age:  " & AgeAtVisit & Char(13) & Char(13) &
+
+If ( Date = Obesity Management::DateOfFirstVisit ;
+  "Initial weight management consultation. Starting weight is " & Weightpounds &
+  " pounds. ¶Reference weight as a goal for BMI of 25 is " & Obesity Management::TargetWeight &
+  " pounds." & Char(13) & Char(13) ;
+
+  If ( IsEmpty ( Date ) = False ;
+    "Patient returns today for follow up on weight management. ¶It has been " & WeeksSince &
+    " weeks since the initial visit on " & Obesity Management::DateOfFirstVisit &
+    ". ¶As of today, " & Lower ( Obesity Management::HeShePronoun ) & "has lost " & WeightLoss &
+    " pounds and now weighs " & Weightpounds & " pounds. ¶This represents a " & PercentLost &
+    " decrease from starting weight of " & Obesity Management::Weightpounds & " pounds." & Char(13) &
+    "¶Reference weight as a goal for BMI of 25 is " & Obesity Management::TargetWeight &
+    " pounds." & Char(13) & Char(13) )
+) &
+
+If ( IsEmpty ( Obesity Management::ListofWeights ) = False ;
+  "Weight History by date: " & Char(13) & Obesity Management::ListofWeights & Char(13) & Char(13) ) &
+
+If ( IsEmpty ( Weightpounds ) = False ;
+  "Weight: " & Weightpounds & " lbs (" & Truncate ( Weightpounds * .453592 ; 1 ) & " kg)" & Char(9) & Char(9) ) &
+If ( IsEmpty ( BMICalculated ) = False ;
+  "BMI: " & BMICalculated & " (" & BMIInterpretation & ")  " ) &
+If ( IsEmpty ( Weightpounds ) = False or IsEmpty ( BMICalculated ) = False ; Char(13) ) &
+
+If ( IsEmpty ( BloodPressureSystolic ) = False ;
+  "Blood Pressure: " & BloodPressureSystolic & "/" & BloodPressureDiastolic & Char(9) & Char(9) ) &
+If ( IsEmpty ( Pulse ) = False ; "Pulse: " & Pulse & Char(9) & Char(9) ) &
+If ( IsEmpty ( BloodPressureSystolic ) = False or
+     IsEmpty ( BloodPressureDiastolic ) = False or
+     IsEmpty ( Pulse ) = False ; Char(13) ) &
+
+If ( IsEmpty ( grip strenth ) = False ; "Grip Strength: " & grip strenth & " lbs" & Char(9) & Char(13) ) &
+
+If ( IsEmpty ( WaistCircumferenceInches ) = False ; "Waist: " & WaistCircumferenceInches & " in" & Char(9) & Char(9) ) &
+If ( IsEmpty ( NeckCircumferenceInches ) = False ;  "Neck: "  & NeckCircumferenceInches  & " in" & Char(9) & Char(9) ) &
+If ( IsEmpty ( HipCircumference ) = False ;         "Hip: "   & HipCircumference         & " in" & Char(9) & Char(9) ) &
+If ( IsEmpty ( WaistCircumferenceInches ) = False or
+     IsEmpty ( NeckCircumferenceInches ) = False or
+     IsEmpty ( HipCircumference ) = False ; Char(13) ) &
+
+If ( GetAsNumber ( BodyFatPercent ) ≥ 5 and GetAsNumber ( BodyFatPercent ) ≤ 60 ;
+  "Body Fat % (US Navy): " & BodyFatPercent & Char(9) & Char(9) & Char(13) ) &
+If ( IsEmpty ( FIB4 ) = False ; "FIB-4: " & FIB4 & Char(9) & Char(9) & Char(13) ) &
+If ( GetAsNumber ( BodyFatPercent ) > 0 or IsEmpty ( FIB4 ) = False ; Char(13) ) &
+
+NoteBlock ( "Past History" ; PastePastHx ) &
+NoteBlock ( "Problem List" ; ProblemList ) &
+NoteBlock ( "Medications" ; Obesity Management::Medications ) &
+NoteBlock ( "Allergies" ; Obesity Management::Allergies ) &
+NoteBlock ( "Patient Reported" ; If ( IsEmpty ( PatientReported ) ; PasteIntakeQ ; PatientReported ) ) &
+NoteBlock ( "Dietary" ; DietaryHabits ) &
+NoteBlock ( "Physical Activity" ; PhysicalActivity ) &
+NoteBlock ( "Behavioral" ; BehavioralChanges ) &
+NoteBlock ( "Medication Review" ; MedicationReview ) &
+NoteBlock ( "Lab Results" ; LabResults ) &
+NoteBlock ( "Metabolic Labs" ; ~metabolic ) &
+NoteBlock ( "Body Composition This Visit" ; ~bodyComp ) &
+NoteBlock ( "Body Composition" ; Obesity Management::SECAScansList ) &
+NoteBlock ( "Body Composition change over time" ; Obesity Management::SECASummary ) &
+NoteBlock ( "Reproductive Health" ; ~repro ) &
+NoteBlock ( "Goal Setting" ; GoalSetting ) &
+NoteBlock ( "Return to Clinic" ; returntoclinic ) &
+NoteBlock ( "Assessment and Plan" ; MDM )
+
+)

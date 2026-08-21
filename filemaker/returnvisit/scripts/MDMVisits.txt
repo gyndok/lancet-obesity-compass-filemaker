@@ -1,0 +1,15 @@
+Set Variable [ $problems; Value:Obesity Management::ProblemList ]
+Set Variable [ $values; Value:ValueCount ( Obesity Management::ProblemList ) ]
+Set Variable [ $i; Value:"1" ]
+If [ IsEmpty ( Visits::MDM ) = True ]
+Loop [ Flush: Always ]
+Exit Loop If [ $i>$values ]
+Set Variable [ $result; Value:
+
+
+$result&$i&") "&TextStyleAdd ( GetValue ( $problems ; $i ) ; Underline )&" "&Char ( 13 )&Char ( 13 ) ]
+Set Variable [ $i; Value:$i+1 ]
+End Loop
+Set Field [ Visits::MDM; $result ]
+End If
+# (comment)

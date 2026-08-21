@@ -1,0 +1,5 @@
+Go to Layout [ “Obesity Management” (Obesity Management) ]
+Enter Find Mode [  ]
+Set Field [ Obesity Management::AccountNumber; Get ( ScriptParameter ) ]
+Perform Find [  ]
+Go to Object [ Object Name: "dashboard"; Repetition: 1 ]

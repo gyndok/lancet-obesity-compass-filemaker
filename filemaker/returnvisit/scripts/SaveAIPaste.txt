@@ -1,0 +1,21 @@
+Set Error Capture [ On ]
+Set Variable [ $json; Value:Get ( ScriptParameter ) ]
+Set Variable [ $acct; Value:JSONGetElement ( $json ; "acct" ) ]
+Set Variable [ $date; Value:Let ( [ p = JSONGetElement ( $json ; "date" ) ] ;
+  If ( PatternCount ( p ; "-" ) > 0 ;
+    Date ( Middle ( p ; 6 ; 2 ) ; Middle ( p ; 9 ; 2 ) ; Left ( p ; 4 ) ) ;
+    GetAsDate ( p ) ) ) ]
+Set Variable [ $home; Value:Get ( LayoutName ) ]
+Freeze Window
+Go to Layout [ “Visits” (Visits) ]
+Enter Find Mode [  ]
+Set Field [ Visits::AccountNumber; $acct ]
+Set Field [ Visits::Date; $date ]
+Perform Find [  ]
+If [ Get ( FoundCount )> 0 ]
+Set Field [ Visits::AIPaste; JSONGetElement ( $json ; "text" ) ]
+Commit Records/Requests
+[ No dialog ]
+End If
+Go to Layout [ $home ]
+Refresh Object [ Object Name: "rvviewer"; Repetition: 1 ]
