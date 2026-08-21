@@ -1,0 +1,8 @@
+Set Error Capture [ On ]
+Set Variable [ $json; Value:Get ( ScriptParameter ) ]
+Set Field [ Obesity Management::InterviewJSON; $json ]
+Set Field [ Obesity Management::AI Plan; Obesity Management::AI Plan&Char ( 13 )&Char ( 13 )&Obesity Management::InterviewSummary ]
+Commit Records/Requests
+[ No dialog ]
+Go to Layout [ “Obesity Management” (Obesity Management) ]
+Go to Object [ Object Name: "AI Plan"; Repetition: 1 ]
