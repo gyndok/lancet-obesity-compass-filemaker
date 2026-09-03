@@ -1,0 +1,9 @@
+Set Variable [ $dest ; Get ( ScriptParameter ) ]
+If [ $dest = "new" ]
+Perform Script [ <existing New Patient script> ]
+Else If [ $dest = "import" ]
+Perform Script [ <existing Import Patient script> ]
+Else If [ $dest = "data" ]
+Go to Layout [ <dashboards layout> ]
+End If
+# Branch targets are wired inside FileMaker; the JS only sends the parameter.

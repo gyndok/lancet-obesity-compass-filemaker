@@ -1,0 +1,16 @@
+Set Error Capture [ On ]
+Set Variable [ $json ; Get ( ScriptParameter ) ]
+Set Variable [ $acct ; JSONGetElement ( $json ; "acct" ) ]
+Set Variable [ $status ; JSONGetElement ( $json ; "status" ) ]
+Set Variable [ $home ; Get ( LayoutName ) ]
+Freeze Window
+Go to Layout [ "Obesity Management" (Obesity Management) ; Animation: None ]
+Enter Find Mode [ Pause: Off ]
+Set Field [ Obesity Management::AccountNumber ; $acct ]
+Perform Find [ ]
+If [ Get ( FoundCount ) > 0 ]
+Set Field [ Obesity Management::Status ; $status ]
+Commit Records/Requests [ With dialog: Off ]
+End If
+Go to Layout [ $home ; Animation: None ]
+Refresh Object [ Object Name: "plviewer" ; Repetition: 1 ]
