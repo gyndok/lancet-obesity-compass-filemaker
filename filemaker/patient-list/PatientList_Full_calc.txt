@@ -1,0 +1,78 @@
+// PatientList_Full v1.0 - 2026-09-02 - patient list app: instant search + filters + weight expanders.
+// Unstored Text calc on Data Visualization. App source from Code Library record PLApp via ExecuteSQL.
+// Boot data via JSONSetElement + Base64. Viewer object: plviewer.
+// Buttons call FM scripts: GoToPatient (fmp:// links), SetPatientStatus (JSON), PLNav (param: new/import/data).
+Let ( [
+app = ExecuteSQL ( "SELECT Source FROM \"Code Library\" WHERE Name=?" ; "" ; "" ; "PLApp" ) ;
+guard = IsEmpty ( app ) or app = "?" ;
+q1 = ExecuteSQL ( "SELECT AccountNumber, PT_LastName, PT_FirstName, Status, Clinic, PT_DOB, DateOfFirstVisit, HeightFt, HeightIn, Weightpounds, TargetWeight, HomePhone, \"Mochi MR\", Prescription FROM \"Obesity Management\"" ; "|" ; ¶ ) ;
+q2 = ExecuteSQL ( "SELECT AccountNumber, \"Date\", Weight FROM WeighIn" ; "|" ; ¶ ) ;
+q3 = ExecuteSQL ( "SELECT AccountNumber, \"Date\" FROM Visits" ; "|" ; ¶ ) ;
+ctx = JSONSetElement ( "{}" ;
+ [ "today" ; GetAsText ( Get ( CurrentDate ) ) ; JSONString ] ;
+ [ "pts" ; q1 ; JSONString ] ;
+ [ "wt" ; q2 ; JSONString ] ;
+ [ "vis" ; q3 ; JSONString ] ) ;
+boot = Substitute ( Base64Encode ( ctx ) ; [ Char(13) ; "" ] ; [ Char(10) ; "" ] )
+] ;
+If ( guard ;
+"<!DOCTYPE html><html><body style='font-family:sans-serif;padding:30px;color:#b91c1c'>Patient list app source missing. Check Code Library record: PLApp.</body></html>" ;
+
+"<!DOCTYPE html><html><head><meta charset='utf-8'><style>" &
+"*{box-sizing:border-box}" &
+"body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#f6f1e7;color:#2b2b26;margin:0;padding:16px 22px 60px}" &
+"#hdr{position:sticky;top:0;background:#f6f1e7;padding:4px 0 10px;border-bottom:1px solid #e3d8c2;z-index:5}" &
+"#hdr h1{margin:0;font-size:20px;color:#0e5c4a;display:inline-block}" &
+"#count{color:#7a6a4f;font-size:12.5px;margin-left:10px}" &
+"#hbtns{float:right}" &
+"#hbtns button{background:#0e5c4a;color:#fff;border:0;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;margin-left:6px}" &
+"#hbtns button.alt{background:#efe7d4;color:#5c5342;border:1px solid #d9c7a7}" &
+"#search{width:100%;margin-top:10px;padding:10px 12px;border:1px solid #c9b98f;border-radius:9px;font-size:15px;background:#fff}" &
+"#chips{margin-top:8px}" &
+".chip{border:1px solid #c9b98f;background:#fff;color:#5c5342;border-radius:14px;padding:4px 12px;margin-right:6px;font-size:12.5px;cursor:pointer}" &
+".chip.on{background:#0e5c4a;border-color:#0e5c4a;color:#fff}" &
+".sep{display:inline-block;width:14px}" &
+"#main{margin-top:12px}" &
+".row{background:#fff;border:1px solid #e3d8c2;border-radius:10px;margin-bottom:8px}" &
+".row.open{border-color:#0e5c4a}" &
+".rmain{display:flex;padding:10px 14px;gap:14px}" &
+".c1{flex:1.4}.c2{flex:1}.c3{min-width:110px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}" &
+"a.pl{color:#0e5c4a;font-weight:700;font-size:14.5px;text-decoration:none}" &
+"a.pl:hover{text-decoration:underline}" &
+".bdg-m,.bdg-w{font-size:10px;border-radius:8px;padding:1px 7px;vertical-align:1px}" &
+".bdg-m{background:#e4eef9;color:#1d4e89}" &
+".bdg-w{background:#e8f2ec;color:#0e5c4a}" &
+".ln{font-size:12.5px;color:#5c5342;margin-top:3px}" &
+".red{color:#b91c1c;font-weight:600}" &
+".amb{color:#b45309;font-weight:600}" &
+".grn{color:#15803d;font-weight:600}" &
+".amb2{color:#b8860b;font-weight:600}" &
+".pur{color:#7c3aed;font-weight:700}" &
+".sb{background:#efe7d4;border:1px solid #d9c7a7;color:#5c5342;border-radius:7px;padding:4px 12px;font-size:12px;cursor:pointer;min-width:92px}" &
+".sb.on{background:#0e5c4a;border-color:#0e5c4a;color:#fff}" &
+".rbody{border-top:1px solid #f0e9d9;padding:10px 14px;font-size:12.5px;color:#5c5342}" &
+".rbody table{border-collapse:collapse;margin-top:6px;font-size:12.5px}" &
+".rbody th{text-align:left;color:#7a6a4f;font-size:11px;text-transform:uppercase;padding:3px 18px 3px 0;border-bottom:1px solid #e3d8c2}" &
+".rbody td{padding:4px 18px 4px 0;border-bottom:1px solid #f0e9d9}" &
+".clear{color:#7a6a4f;font-size:13px;font-style:italic;padding:14px}" &
+"#out{color:#7a6a4f;font-size:11px;white-space:pre-wrap;word-break:break-word}" &
+"</style></head><body>" &
+"<div id='hdr'>" &
+"<h1>Patients</h1><span id='count'></span>" &
+"<span id='hbtns'><button id='btn-new'>New Patient</button><button id='btn-import'>Import</button><button class='alt' id='btn-data'>Dashboards</button></span>" &
+"<input id='search' type='text' placeholder='Search name, account #, DOB, Mochi MR, phone - or paste a Mochi MR' autocomplete='off'>" &
+"<div id='chips'></div>" &
+"</div>" &
+"<div id='main'></div>" &
+"<div id='out'></div>" &
+"<script>window.__plboot=[1];</script>" &
+"<script>" & app & "</script>" &
+"<script>window.__plboot.push(2);</script>" &
+"<script>" &
+"var PLB='" & boot & "';" &
+"function b64u(s){var t=new TextDecoder().decode(Uint8Array.from(atob(s),function(c){return c.charCodeAt(0);}));" &
+"return t.replace(/[\\u0000-\\u001F]/g,function(c){return c===String.fromCharCode(11)?String.fromCharCode(92)+String.fromCharCode(110):String.fromCharCode(32);});}" &
+"try{var fb=JSON.parse(b64u(PLB));PLAPP.boot(fb);}catch(e){document.body.innerHTML='<div style=padding:30px;color:#b91c1c>Boot failed: '+e.message+' (markers: '+JSON.stringify(window.__plboot)+')</div>';}" &
+"</script>" &
+"</body></html>"
+) )

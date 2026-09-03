@@ -1,0 +1,174 @@
+/* PL-FM pl_app.js v1.1 - patient list: instant search + filters + row expanders.
+   v1.1: phantom-row guard - continuation lines from CR-containing text fields (e.g. pasted
+   med-guide text in Prescription) are dropped: real rows have >=14 fields + numeric acct. */
+var PLAPP = (function () {
+  var S = { q: '', clinic: 'All', status: 'Active', sort: 'name', open: '' };
+  var CTX = { today: '', model: null };
+
+  function pd(s) { if (!s) { return null; }
+    var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) { return new Date(+m[1], +m[2] - 1, +m[3]).getTime(); }
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) { return new Date(+m[3], +m[1] - 1, +m[2]).getTime(); }
+    return null; }
+  function r1(x) { return Math.round(x * 10) / 10; }
+  function r2(x) { return Math.round(x * 100) / 100; }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function P(s) { if (!s || s === '?') { return []; } return s.split(/[\r\n]+/).filter(function (x) { return x.length > 0; }); }
+  function fmtD(ms) { if (ms == null) { return '-'; } var d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear(); }
+  function firstLine(s) { return String(s || '').split(/[\r\n]+/)[0]; }
+
+  function buildModel(fb) {
+    var now = pd(fb.today) || Date.now();
+    var pts = {}, order = [];
+    P(fb.pts).forEach(function (r) { var p = r.split('|'); var a = (p[0] || '').trim(); if (!a) { return; }
+      if (p.length < 14 || !/^\d+$/.test(a)) { return; } /* v1.1: drop CR-continuation phantom rows */
+      var ft = parseFloat(p[7]) || 0, inch = parseFloat(p[8]) || 0;
+      pts[a] = { acct: a, last: (p[1] || '').trim(), first: (p[2] || '').trim(), status: (p[3] || '').trim(),
+        clinic: (p[4] || '').trim(), dobStr: (p[5] || '').trim(), dob: pd(p[5]),
+        fvStr: (p[6] || '').trim(), fv: pd(p[6]),
+        hIn: (ft > 0 || inch > 0) ? ft * 12 + inch : null,
+        startW: parseFloat(p[9]) || null, target: parseFloat(p[10]) || null,
+        phone: (p[11] || '').trim(), mr: (p[12] || '').trim(),
+        rx: p.slice(13).join('|'), wt: [], lastVisitT: null };
+      order.push(a); });
+    P(fb.wt).forEach(function (r) { var p = r.split('|'); var o = pts[(p[0] || '').trim()]; if (!o) { return; }
+      var t = pd(p[1]), w = parseFloat(p[2]); if (t && w > 0) { o.wt.push({ t: t, w: w }); } });
+    P(fb.vis).forEach(function (r) { var p = r.split('|'); var o = pts[(p[0] || '').trim()]; if (!o) { return; }
+      var t = pd(p[1]); if (t && (o.lastVisitT == null || t > o.lastVisitT)) { o.lastVisitT = t; } });
+    order.forEach(function (a) { var o = pts[a];
+      o.wt.sort(function (x, y) { return x.t - y.t; });
+      o.curW = o.wt.length ? o.wt[o.wt.length - 1].w : null;
+      var base = (o.startW != null && o.startW > 0) ? o.startW : (o.wt.length ? o.wt[0].w : null);
+      o.baseW = base;
+      o.loss = (base != null && o.curW != null) ? r1(base - o.curW) : null;
+      o.tbwl = (base != null && o.curW != null && base > 0) ? r1((base - o.curW) / base * 100) : null;
+      o.bmiStart = (base != null && o.hIn) ? r2(base / (o.hIn * o.hIn) * 703) : null;
+      o.bmiCur = (o.curW != null && o.hIn) ? r2(o.curW / (o.hIn * o.hIn) * 703) : null;
+      var lc = null;
+      if (o.wt.length) { lc = o.wt[o.wt.length - 1].t; }
+      if (o.lastVisitT != null && (lc == null || o.lastVisitT > lc)) { lc = o.lastVisitT; }
+      o.lastContact = lc;
+      o.days = (lc != null) ? Math.floor((now - lc) / 86400000) : null;
+      o.age = (o.dob != null) ? Math.floor((now - o.dob) / 31557600000) : null;
+      o.hay = (o.last + ' ' + o.first + ' ' + o.acct + ' ' + o.dobStr + ' ' + fmtD(o.dob) + ' ' + o.mr + ' ' + o.phone).toLowerCase(); });
+    return { pts: pts, order: order, now: now };
+  }
+
+  function filtered(M) {
+    var q = S.q.trim().toLowerCase();
+    var out = [];
+    M.order.forEach(function (a) { var o = M.pts[a];
+      if (S.clinic !== 'All' && o.clinic !== S.clinic) { return; }
+      if (S.status !== 'All') {
+        var st = o.status.toLowerCase();
+        if (S.status === 'Active' && st !== 'active') { return; }
+        if (S.status === 'Inactive' && st === 'active') { return; }
+      }
+      if (q && o.hay.indexOf(q) === -1) { return; }
+      out.push(o); });
+    var f = {
+      name: function (x, y) { return (x.last + x.first).localeCompare(y.last + y.first); },
+      visit: function (x, y) { var nx = x.days == null ? -1 : x.days, ny = y.days == null ? -1 : y.days; return ny - nx; },
+      tbwl: function (x, y) { return (y.tbwl == null ? -999 : y.tbwl) - (x.tbwl == null ? -999 : x.tbwl); }
+    }[S.sort] || null;
+    if (f) { out.sort(f); }
+    return out;
+  }
+
+  /* ---------- DOM ---------- */
+  function el(id) { return (typeof document === 'undefined') ? null : document.getElementById(id); }
+  function nav(dest) {
+    if (typeof FileMaker !== 'undefined' && FileMaker.PerformScriptWithOption) {
+      FileMaker.PerformScriptWithOption('PLNav', dest, '0'); } }
+  function setStatus(acct, status, btn) {
+    if (typeof FileMaker !== 'undefined' && FileMaker.PerformScriptWithOption) {
+      FileMaker.PerformScriptWithOption('SetPatientStatus', JSON.stringify({ acct: acct, status: status }), '0');
+      if (btn) { btn.textContent = '...'; }
+      return true; }
+    var d = el('out'); if (d) { d.textContent = JSON.stringify({ acct: acct, status: status }); }
+    return false; }
+  function dayCls(d) { if (d == null) { return 'red'; } if (d > 122) { return 'red'; } if (d >= 91) { return 'amb'; } return 'grn'; }
+  function bmiCls(b) { if (b == null) { return ''; } if (b >= 30) { return 'red'; } if (b >= 25) { return 'amb'; } return 'grn'; }
+  function tbwlCls(t) { if (t == null) { return ''; } if (t >= 20) { return 'pur'; } if (t >= 10) { return 'amb2'; } return ''; }
+
+  function rowHtml(o) {
+    var open = (S.open === o.acct);
+    var badge = (o.clinic === 'Mochi') ? '<span class=bdg-m>Mochi</span>' : ((o.clinic === 'WSOC') ? '<span class=bdg-w>WSOC</span>' : '');
+    var act = o.status.toLowerCase() === 'active';
+    var h = '<div class="row' + (open ? ' open' : '') + '">' +
+      '<div class="rmain">' +
+      '<div class="c1">' +
+      '<a class="pl" href="fmp://$/Obesity%20Management?script=GoToPatient&param=' + encodeURIComponent(o.acct) + '">' + esc(o.last) + ', ' + esc(o.first) + '</a> ' + badge +
+      '<div class="ln">DOB ' + esc(o.dobStr || '-') + (o.age != null ? ' (' + o.age + 'y)' : '') + ' &middot; #' + esc(o.acct) + (o.mr ? ' &middot; MR ' + esc(o.mr) : '') + '</div>' +
+      '<div class="ln">First visit ' + esc(o.fvStr || '-') + ' &middot; Last <span class="' + dayCls(o.days) + '">' + (o.days == null ? 'none' : fmtD(o.lastContact) + ' (' + o.days + 'd)') + '</span></div>' +
+      '</div>' +
+      '<div class="c2">' +
+      '<div class="ln">BMI <span class="' + bmiCls(o.bmiStart) + '">' + (o.bmiStart == null ? '-' : o.bmiStart) + '</span> &rarr; <span class="' + bmiCls(o.bmiCur) + '">' + (o.bmiCur == null ? '-' : o.bmiCur) + '</span></div>' +
+      '<div class="ln">Loss ' + (o.loss == null ? '-' : o.loss + ' lb') + ' <span class="' + tbwlCls(o.tbwl) + '">' + (o.tbwl == null ? '' : '(' + o.tbwl + '%)') + '</span></div>' +
+      '<div class="ln">' + esc(firstLine(o.rx) || 'no AOM') + '</div>' +
+      '</div>' +
+      '<div class="c3">' +
+      '<button class="sb' + (act ? ' on' : '') + '" data-st="' + esc(o.acct) + '">' + (act ? 'Active' : 'Inactive') + '</button>' +
+      '<button class="sb" data-x="' + esc(o.acct) + '">' + (open ? 'Hide' : 'Weights') + '</button>' +
+      '</div></div>';
+    if (open) {
+      var base = o.baseW;
+      var rows = o.wt.slice(-10).reverse().map(function (w) {
+        var pct = (base && base > 0) ? r1((base - w.w) / base * 100) : null;
+        return '<tr><td>' + fmtD(w.t) + '</td><td>' + w.w + '</td><td>' + (pct == null ? '-' : pct + '%') + '</td></tr>'; }).join('');
+      h += '<div class="rbody">Initial ' + (base == null ? '-' : base + ' lb') +
+        (o.target ? ' &middot; Target ' + o.target + ' lb' : '') +
+        '<table><tr><th>Date</th><th>Weight</th><th>%Loss</th></tr>' +
+        (rows || '<tr><td colspan=3>No weigh-ins</td></tr>') + '</table></div>';
+    }
+    return h + '</div>';
+  }
+
+  function renderAll() {
+    if (typeof document === 'undefined') { return; }
+    var M = CTX.model;
+    var list = filtered(M);
+    var mk = function (grp, n, lbl) { return '<button class="chip' + ((S[grp] === n) ? ' on' : '') + '" data-g="' + grp + '" data-v="' + n + '">' + lbl + '</button>'; };
+    el('chips').innerHTML =
+      mk('clinic', 'All', 'All') + mk('clinic', 'WSOC', 'WSOC') + mk('clinic', 'Mochi', 'Mochi') +
+      '<span class="sep"></span>' +
+      mk('status', 'Active', 'Active') + mk('status', 'Inactive', 'Inactive') + mk('status', 'All', 'Everyone') +
+      '<span class="sep"></span>' +
+      mk('sort', 'name', 'A-Z') + mk('sort', 'visit', 'Overdue') + mk('sort', 'tbwl', 'Top loss');
+    el('count').textContent = list.length + ' patient' + (list.length === 1 ? '' : 's');
+    var cap = 200;
+    el('main').innerHTML = list.slice(0, cap).map(rowHtml).join('') +
+      (list.length > cap ? '<div class="clear">' + (list.length - cap) + ' more - narrow the search</div>' : '') +
+      (!list.length ? '<div class="clear">No matches.</div>' : '');
+    wire();
+  }
+  function wire() {
+    document.querySelectorAll('[data-g]').forEach(function (n) {
+      n.onclick = function () { S[n.getAttribute('data-g')] = n.getAttribute('data-v'); S.open = ''; renderAll(); }; });
+    document.querySelectorAll('[data-x]').forEach(function (n) {
+      n.onclick = function () { var a = n.getAttribute('data-x'); S.open = (S.open === a) ? '' : a; renderAll(); }; });
+    document.querySelectorAll('[data-st]').forEach(function (n) {
+      n.onclick = function () { var a = n.getAttribute('data-st');
+        var o = CTX.model.pts[a];
+        var next = (o.status.toLowerCase() === 'active') ? 'Inactive' : 'Active';
+        o.status = next; /* optimistic */
+        setStatus(a, next, n); renderAll(); }; });
+    var nb = el('btn-new'); if (nb) { nb.onclick = function () { nav('new'); }; }
+    var ib = el('btn-import'); if (ib) { ib.onclick = function () { nav('import'); }; }
+    var db = el('btn-data'); if (db) { db.onclick = function () { nav('data'); }; }
+  }
+  function boot(fb) {
+    CTX.today = fb.today || '';
+    CTX.model = buildModel(fb);
+    var sb = el('search');
+    if (sb) { sb.oninput = function () { S.q = sb.value; S.open = ''; renderAll(); };
+      sb.onfocus = function () { sb.select(); }; }
+    renderAll();
+    if (sb) { sb.focus(); }
+  }
+  return { S: S, CTX: CTX, pd: pd, buildModel: buildModel, filtered: filtered, boot: boot, renderAll: renderAll };
+})();
+if (typeof module !== 'undefined') { module.exports = PLAPP; }
+
+var PL_APP_VERSION="1.1";
