@@ -1,0 +1,105 @@
+// de-CDN'd 2026-09-06: chart libraries inlined from global-storage fields
+// Globals::ChartJS_Source (208521 ch) / Globals::Annotation_Source (34251 ch)
+// and OM Code Library record 'Annotation' (34251 ch). Google Fonts links removed.
+// Verified rendering with Wi-Fi off 2026-09-06. NEVER delete these fields/records.
+// PtDash_Head v1.9 - Obesity Management, result Text, UNSTORED
+// Half 1 of 2. Web viewer address:  "data:text/html," & PtDash_Head & PtDash_Body
+// Two calcs because the combined dashboard exceeds FileMaker's 30k limit per
+// calculation. This half holds the CSS and the empty HTML shell; PtDash_Body
+// holds the data queries and all JavaScript. Neither half is valid alone.
+// Palette inherited from the weight chart: white cards on #f5f7fa->#e8edf5,
+// navy #2c3e6b headings, #3b6fd4 data, muted #7a8aaa labels, and the same
+// five BMI zone colors.
+"<!DOCTYPE html><html><head><meta charset='utf-8'>"
+& "<script>" & Globals::ChartJS_Source & "</" & "script>"
+& "<script>" & ExecuteSQL ( "SELECT Source FROM \"Code Library\" WHERE Name=?" ; "" ; "" ; "Annotation" ) & "</" & "script>"
+& "<style>"
+& "* { box-sizing: border-box; margin: 0; padding: 0; }"
+& "body { background: linear-gradient(135deg, #f5f7fa, #e8edf5); font-family: Inter, sans-serif; padding: 14px; min-height: 100vh; }"
+& ".card { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.07); padding: 16px; margin-bottom: 12px; }"
+& ".ct { font-size: 13px; font-weight: 700; color: #2c3e6b; margin-bottom: 10px; letter-spacing: .02em; }"
+& ".nm { font-size: 20px; font-weight: 700; color: #2c3e6b; }"
+& ".sub { font-size: 12px; color: #7a8aaa; margin-top: 2px; }"
+& ".badges { margin-top: 8px; }"
+& ".badge { display: inline-block; background: #eef2fb; color: #2c3e6b; font-size: 11px; font-weight: 600; padding: 3px 11px; border-radius: 20px; margin-right: 6px; }"
+& ".badge.green { background: #e6f9f0; color: #1a9e5c; }"
+& ".badge.amber { background: #fdf3e0; color: #c97a15; }"
+& ".badge.red { background: #fdeceb; color: #c0392b; }"
+// follow-up banner: red past 4 months, amber at 3-4
+& ".banner { border-radius: 12px; padding: 11px 15px; margin-bottom: 12px; font-size: 13px; font-weight: 700; display: none; }"
+& ".banner.red { background: #fdeceb; color: #a5281b; border: 1.5px solid rgba(192,57,43,.45); }"
+& ".banner.amber { background: #fdf3e0; color: #8a5a10; border: 1.5px solid rgba(230,126,34,.45); }"
+// hero stat tiles
+& ".stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }"
+& ".tile { background: white; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.07); padding: 13px 14px; }"
+& ".tile .k { font-size: 10.5px; font-weight: 600; color: #7a8aaa; text-transform: uppercase; letter-spacing: .04em; }"
+& ".tile .v { font-size: 23px; font-weight: 700; color: #2c3e6b; margin-top: 3px; line-height: 1.1; }"
+& ".tile .u { font-size: 12px; font-weight: 600; color: #7a8aaa; }"
+& ".tile .d { font-size: 11px; font-weight: 600; margin-top: 3px; }"
+& ".tile.na .v { color: #b6c1d4; font-size: 17px; font-style: italic; }"
+// zone colors, shared with the weight chart
+& ".z1 { color: #1a9e5c; } .z2 { color: #c99c0f; } .z3 { color: #d4761c; } .z4 { color: #c0392b; } .z5 { color: #8b1e14; }"
+// v1.8: .row .v (0,2,0) outranked bare .z* (0,1,0), so zone colors silently
+// never applied inside row panels - only tiles colored. These win on specificity,
+// and abnormal (z3/z4) rows color their sub-labels too so the flag reads clearly.
+& ".row .v.z1 { color: #1a9e5c; } .row .v.z2 { color: #c99c0f; } .row .v.z3 { color: #d4761c; } .row .v.z4 { color: #c0392b; } .row .v.z5 { color: #8b1e14; }"
+& ".row .v.z3 .sub2, .row .v.z4 .sub2, .row .v.z5 .sub2 { color: inherit; opacity: .8; }"
+& ".bclbl { font-size: 11px; font-weight: 700; color: #7a8aaa; text-align: center; margin-bottom: 4px; }"
+& ".chart-wrap { position: relative; height: 250px; }"
+& ".chart-wrap.sm { height: 190px; }"
+& ".grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }"
+// metric rows; .na renders a missing single metric without hiding the panel
+& ".row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid #f0f2f7; font-size: 12.5px; }"
+& ".row:last-child { border-bottom: none; }"
+& ".row .k { color: #7a8aaa; font-weight: 600; }"
+& ".row .v { color: #2c3e6b; font-weight: 700; }"
+& ".row .v .sub2 { color: #7a8aaa; font-weight: 400; font-size: 11px; margin-left: 5px; }"
+& ".row.na .v { color: #b6c1d4; font-weight: 400; font-style: italic; }"
+// GHOST PANEL: absent data looks deliberate, never broken
+& ".ghost { border: 1.5px dashed rgba(122,138,170,0.4); border-radius: 12px; padding: 22px 16px; text-align: center; }"
+& ".ghost .g1 { font-size: 12.5px; font-style: italic; color: #9aa8c0; }"
+& ".ghost .g2 { font-size: 11px; color: #b0bcd0; margin-top: 5px; }"
+& ".ghost.stale { border-color: rgba(230,126,34,.4); background: rgba(253,243,224,.35); }"
+& ".ghost.stale .g1 { color: #c97a15; font-style: normal; font-weight: 600; }"
+& ".ghost.stale .g2 { color: #b08a4a; }"
+& ".med { font-size: 12.5px; padding: 6px 0; border-bottom: 1px solid #f0f2f7; }"
+& ".med:last-child { border-bottom: none; }"
+& ".med b { color: #2c3e6b; } .med span { color: #7a8aaa; }"
+& ".aom { background: #eef2fb; border-radius: 10px; padding: 8px 11px; margin-bottom: 8px; font-size: 12.5px; }"
+& ".aom .k2 { font-size: 10px; font-weight: 700; color: #7a8aaa; text-transform: uppercase; letter-spacing: .05em; }"
+& ".aom .v2 { font-size: 14px; font-weight: 700; color: #2c3e6b; margin-top: 2px; }"
+& ".labdiv { border-top: 1.5px solid #f0f2f7; margin: 9px 0 4px; padding-top: 7px; font-size: 10px; font-weight: 700; color: #9aa8c0; text-transform: uppercase; letter-spacing: .05em; }"
+& ".chip { display: inline-block; background: #eef2fb; color: #2c3e6b; font-size: 11.5px; font-weight: 600; padding: 4px 12px; border-radius: 20px; margin: 0 6px 6px 0; }"
+& ".chip.amber { background: #fdf3e0; color: #8a5a10; border: 1px solid rgba(230,126,34,.35); }"
+& "#err { color: #8B1E14; font-size: 11px; text-align: center; margin-top: 8px; white-space: pre-wrap; }"
+// v1.9: print stylesheet - used when the dashboard HTML is opened in Safari
+// and printed (File > Print / Cmd-P). Keeps zone colors, drops shadows,
+// prevents cards splitting across pages.
+& "@media print {"
+& "  body { background: #fff; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }"
+& "  .card, .tile { box-shadow: none; border: 1px solid #e3e8f2; break-inside: avoid; }"
+& "  .stats { break-inside: avoid; }"
+& "  .chart-wrap { height: 220px; } .chart-wrap.sm { height: 170px; }"
+& "  .banner { border-width: 1px; }"
+& "}"
+& "</style>"
+& "<script>"
+& "window.onerror = function(m, s, l) { var e = document.getElementById('err');"
+& "  if (e) e.textContent = 'JS error: ' + m + ' (line ' + l + ')'; return false; };"
+& "</" & "script>"
+& "</head><body>"
+& "<div id='banner' class='banner'></div>"
+& "<div class='card'><div class='nm' id='nm'></div><div class='sub' id='sub'></div><div class='badges' id='badges'></div></div>"
+& "<div class='stats' id='stats'></div>"
+& "<div class='card'><div class='ct'>Problem List</div><div id='probs'></div></div>"
+& "<div class='card'><div class='ct'>Weight Trajectory</div><div class='chart-wrap'><canvas id='wchart'></canvas></div></div>"
+& "<div class='card'><div class='ct'>Body Composition</div><div id='bc'></div></div>"
+& "<div class='grid2'>"
+& "  <div class='card'><div class='ct'>Measurements</div><div id='meas'></div></div>"
+& "  <div class='card'><div class='ct'>Vitals &amp; Function</div><div id='vitals'></div></div>"
+& "</div>"
+& "<div class='grid2'>"
+& "  <div class='card'><div class='ct'>Labs &amp; Metabolic</div><div id='metab'></div></div>"
+& "  <div class='card'><div class='ct'>Medications</div><div id='meds'></div></div>"
+& "</div>"
+& "<div id='err'></div>"
