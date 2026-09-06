@@ -1,9 +1,24 @@
+// VisitSummary - Visits table, field id 33, unstored Text calc.
+// Extracted verbatim from the 2026-09-06 DDR (post E/M edit of 2026-09-04/05).
+// E/M coding addendum (~em) appended to the MOCHI branch only; WSOC branch (Prompt) untouched.
 Let ([
   // ---------- prompt selection ----------
   ~inc    = Trim ( Substitute ( includePrompt ; [ Char(13) ; "" ] ; [ Char(10) ; "" ] ) ) ;
   ~clinic = Trim ( Substitute ( Obesity Management::Clinic ; [ Char(13) ; "" ] ; [ Char(10) ; "" ] ) ) ;
+
+  // E/M coding addendum - Mochi visits only (added 2026-09-05)
+  ~em =
+    "ADDITIONAL REQUIREMENT - E/M CODING (append as the final section of the note):" & Char(13) &
+    "After the note, add a section titled E/M Code & Rationale. Recommend the appropriate outpatient E/M code (99202-99205 for new patients, 99212-99215 for established) and justify it using current AMA guidelines for Medical Decision Making (MDM) complexity. Briefly state how the documentation meets the required level for each of:" & Char(13) &
+    "1. Number and Complexity of Problems Addressed" & Char(13) &
+    "2. Amount and/or Complexity of Data Reviewed and Analyzed" & Char(13) &
+    "3. Risk of Complications and/or Morbidity or Mortality" & Char(13) &
+    "If total visit time is documented in the raw data, also calculate the code based on total time as an alternative and state which method supports the higher code." ;
+
   ~p      = If ( ~inc = "Yes" ;
-                 If ( ~clinic = "Mochi" ; MochiFollowUpPrompt ; Prompt ) ) ;
+                 If ( ~clinic = "Mochi" ;
+                      MochiFollowUpPrompt & Char(13) & Char(13) & ~em ;
+                      Prompt ) ) ;
 
   // ---------- progress to goal ----------
   ~start = GetAsNumber ( Obesity Management::Weightpounds ) ;
@@ -141,5 +156,4 @@ NoteBlock ( "Reproductive Health" ; ~repro ) &
 NoteBlock ( "Goal Setting" ; GoalSetting ) &
 NoteBlock ( "Return to Clinic" ; returntoclinic ) &
 NoteBlock ( "Assessment and Plan" ; MDM )
-
 )
