@@ -1,64 +1,62 @@
 # HANDOFF.md — Obesity Management FileMaker Development
-**Written:** 2026-09-03 (updated same day). Covers the Aug 21 + Sep 2–3 sessions (GitHub backup, MetabolicFlags, LifestyleRx, PatientList, and the new Prenatal Record project). Successor to the Aug 20 handoff; everything that mattered is restated or superseded here.
+**Written:** 2026-09-03; updated 2026-09-06 (E/M prompts, offline hardening). Covers the Aug 21 + Sep 2–6 sessions (GitHub backup, MetabolicFlags, LifestyleRx, PatientList, PNList in the prenatal repo, E/M coding, de-CDN). Successor to the Aug 20 handoff; everything that mattered is restated or superseded here.
 
 ## Who / What
 Geffrey Klein, MD — OB/GYN + obesity medicine (WSOC + Mochi telemedicine). FileMaker 2025 (v26) file **Obesity Management.fmp12** (~1,221 patients, ~841 active). Physician-developer; comfortable with Manage Database, Script Workspace, calc pasting, FmClipTools. Nurse handles patient outreach (that's why OutreachWorklist was shelved).
 
-## GitHub (full backup as of Sep 3)
+## GitHub (NEW — full backup as of Sep 3)
 Repo: **github.com/gyndok/lancet-obesity-compass-filemaker** (main). Push via the `github` local-dev MCP connector (works from Cowork; gh CLI on Mac also works).
 - `filemaker/returnvisit/` — RVApp v1.8 source (recovered via Export Field Contents Aug 21), ReturnVisit_Full calc v1.7, VisitSummary + VisitSummaryCopy calcs, all 6 scripts, README.
 - `filemaker/paneldash/` — Head/Body/Body2 **v1.0 as actually deployed** (DDR proved v1.1 was delivered in-chat but never pasted — legend-bottom fix still pending if wanted), HTML_Audit outcomes viewer, README.
 - `filemaker/patient-list/` — PLApp v1.1 + calc + SetPatientStatus + PLNav + README (DEPLOYED).
 - `filemaker/outreach-worklist/` — OWApp v1.0 + calc + MarkOutreach (BUILT + node-tested, **NOT deployed** — shelved; README has 20-min install if revived).
-- `filemaker/` root — MetabolicFlags calc v2.0, LifestyleRx, Interview_Full v1.2, InterviewSummary, MochiRefillMsg v1.1, SaveInterview script.
+- `filemaker/decdn/` — offline hardening (Sep 6): post-edit PtDash_Head / GoogleChart HTML / HTML_Audit calc texts + README with the library inventory.
+- `filemaker/` root — MetabolicFlags calc v2.0, LifestyleRx (see below), Interview_Full v1.2, InterviewSummary, MochiRefillMsg v1.1, SaveInterview script.
 Interview repo lineage (v1 web / v2 desktop / v3 FM) unchanged.
+Prenatal Record work lives in **github.com/gyndok/prenatal-record-filemaker** (private): PNList app/calc/PNNav + HTMLChartPrenatal2.
 
-## NEW: Prenatal Record file (Sep 3)
-Repo: **github.com/gyndok/prenatal-record-filemaker** (private). Same architecture ported to **Prenatal Record.fmp12** (~14,534 records; file already had its own Code Library table w/ ChartJS/Annotation/PNCApp records from the PrenatalChart port).
-- **PNList v1.1 DEPLOYED**: instant-search patient list replacing legacy Search Screen + Search Results. Layout "Prenatal List" on **Practice Information**, viewer object `pnviewer`, Code Library record `PNList`, calc `Practice Information::PNList_Full`. Default Active-by-due-next with live GA chips (amber >=37w, red >=40w) from `EDC Selected`; typing a search auto-widens to Everyone. Row buttons Flow/Labs/US/Admit -> script **PNNav** ({rid,dest}); branches replicate legacy search-button destination steps (legacy scripts re-run screen finds — never call them directly). Status port of `activepreg` calc in JS.
-- **`pnkey`** stored serial on Prenatal Record (backfilled 1–14,534) is the row key — replaced the unstored `recordid` calc in both SQL and PNNav find for the big performance win. LOAD-BEARING: never renumber.
-- Optional next perf step if wanted: cache pattern (PNListCache/PNListCacheTime + RefreshPNList + OnLayoutEnter staleness check) — documented in that repo's README.
-- DDR transfer trick for the 44MB XML: gzip on-device via device_bash into the connected folder, stage the .gz (chat upload rejects >~20MB; Downloads folder connected via desktop app).
-
-## Deployed systems in Obesity Management (verified in production)
+## Deployed systems (verified in production)
 1. **PanelDash v1.0** (Data Visualization; deployed Body/Body2 are v1.0, not v1.1).
 2. **MochiRefillMsg v1.1** (OM calc).
 3. **Lancet interview** (Code Library LOCEngine 1.0 / LOCQuestions 1.1 / LOCApp 1.2; Interview_Full v1.2).
 4. **ReturnVisit** (RVApp v1.8 / ReturnVisit_Full v1.7 / SaveReturnVisit 69 steps).
-5. **MetabolicFlags v2.0** (OM unstored calc) — parses `Labsbefore` free text (newest ISO date wins per analyte) -> HOMA-IR + FIB-4 (age at AST draw, >=65 cutoff 2.0) with flags. Empty if no data. While() loops, no CF.
-6. **VisitSummary Copy** = ScrubPHI(VisitSummary) + appended Metabolic Flags block (feeds every Doximity prompt).
-7. **LifestyleRx v1.0** (OM unstored calc) — exercise prescription block + diet rec for nutritionist (RMR cascade, RMR-500 with 1200F/1500M floor, protein 1.2 g/kg).
-8. **PatientList v1.1** — instant-search list on Data Visualization (`plviewer`, PLApp v1.1, SetPatientStatus, PLNav). Count verified = native 1221. Old menu/search layouts still exist — retire after ~1 week of trust.
+5. **MetabolicFlags v2.0** (OM unstored calc) — parses `Labsbefore` free text (lines `YYYY-MM-DD — Name — Value [range]`, newest ISO date wins per analyte, urine-glucose "Negative" skipped) → HOMA-IR (gluc×ins/405) + FIB-4 (age×AST/(PLT×√ALT), age at AST draw, ≥65 cutoff 2.0) with NORMAL/BORDERLINE/INDETERMINATE/ABNORMAL flags. Tiers: HOMA <1/<2/<3/≥3; FIB-4 1.3/2.67. Empty if no data. Uses While() loops — no CF needed.
+6. **VisitSummary Copy** (Doximity prompt field) = `ScrubPHI(VisitSummary) & appended "Metabolic Flags:" block` — every Doximity prompt now carries dated HOMA-IR/FIB-4.
+7. **LifestyleRx v1.0** (OM unstored calc, delivered Sep 2) — verbatim exercise prescription block + personalized diet rec for nutritionist consult (RMR cascade BIABasalMetabolicRate→Mifflin, RMR−500 with 1200F/1500M floor matching VisitSummary, protein 1.2 g/kg via proteinIntake w/ CurrentWeight fallback). *Confirm it was pasted/verified — delivered but deployment not explicitly confirmed in-chat.*
+8. **E/M coding, Mochi-only (Sep 6)** — follow-up `VisitSummary` calc got a `~em` addendum appended to the Mochi branch only (AMA MDM 3-element rationale + time-based alternative, codes 99202-99215); the new-patient prompt calc got "11. E/M Code and Rationale" inserted in its Mochi literal (AVS renumbered to 12, Output Requirements line extended). WSOC branches untouched. **Repo copies pending — the delivered calc texts were lost to context compaction; copy both calcs out of Manage Database into the repo next session.**
+9. **Offline hardening / de-CDN (Sep 6)** — every live web viewer in BOTH files now inlines its chart libraries from in-file storage; zero external requests; all verified with Wi-Fi off. Trigger: a half-dead internet gateway blanked every CDN-dependent viewer in both files simultaneously (first misdiagnosed as FileMaker WebKit blocking data:-URL fetches — it was the network). Full details, library inventory (NEVER delete `Globals::ChartJS_Source` / `Annotation_Source`, Code Library `Annotation`/`ChartJS`/`Highcharts` records), and post-edit calc texts: `filemaker/decdn/README.md` + prenatal repo. Patient-dashboard viewer address is now Base64 (`"data:text/html;base64," & Base64Encode(Head & Body & Body2)`) with `<meta charset='utf-8'>`.
+10. **PatientList v1.1** (replaces main menu + search screens) — layout "Patient List" on Data Visualization, viewer object `plviewer`, Code Library `PLApp` v1.1, calc `PatientList_Full`. Instant search (name/acct/DOB both formats/Mochi MR/phone; autofocus + select-all → Mochi MR workflow = land, ⌘V, done). Chips All/WSOC/Mochi + Active/Inactive/Everyone + sorts A-Z/Overdue/Top-loss. 200-row render cap. Scripts: SetPatientStatus (optimistic toggle, self-correcting via Refresh Object), PLNav (param new/import/data → wired natively). v1.1 guard: real rows need 14 pipe-fields + numeric acct (kills phantom rows from CR-containing Prescription text). Count verified = native 1221. Old menu/search layouts still exist — retire after ~1 week of trust.
 
 ## Hard-won lessons (all Aug 20 lessons still apply, plus)
-11. **CR-continuation phantom rows**: any SELECTed text field with returns spawns fake rows; put risky text fields LAST in the SELECT and guard in JS (field-count + numeric-key test). Bit PatientList (36 phantoms) and PNList (~125).
-12. **FM string escapes `\\` -> `\`**: write JS control-char regex in calcs as `\\u0000-\\u001F` (ASCII-safe).
-13. **DDR != Code Library**: record data never appears in a DDR — Export Field Contents recovers it. Clipboard copies of big code can silently become screenshots (RTFD trap).
-14. **While() works great** for text parsing in plain calcs (MetabolicFlags).
-15. DDR has catalog-stub duplicate <Script> nodes (0 steps) — take the longest when extracting.
-16. **Unstored calc keys are slow everywhere**: SQLing or Finding on an unstored calc (e.g. Get(RecordID) recordid) touches every record. Add a stored auto-enter serial, backfill via Replace Field Contents w/ "update Entry Options", and swap it into both the SELECT and the find (PNList v1.1 pattern).
-17. Legacy screen-context scripts (that Set Field in Find mode + Perform Find on user-entered criteria) must not be called from viewer nav scripts — replicate only their destination steps.
+11. **CR-continuation phantom rows**: any SELECTed text field containing returns spawns fake rows; put risky text fields LAST in the SELECT and guard in JS (field-count + numeric-key test). Bit PatientList (36 phantoms from med-guide text pasted in one patient's Prescription).
+12. **FM string escapes `\\` → `\`**: write JS regex in calcs as `\\u0000` (ASCII-safe, replaces embedding raw control chars).
+13. **DDR ≠ Code Library**: record data (RVApp etc.) never appears in a DDR — only Export Field Contents recovers it. Clipboard copies of big code can silently become screenshots (RTFD trap); always Export Field Contents → .txt.
+14. **While() works great** for text parsing in plain calcs (MetabolicFlags) — no custom function needed.
+15. Multiple `<Script>` nodes appear per name in DDR (catalog stubs with 0 steps) — take the longest when extracting.
+16. **Correlated viewer failures = check the network first.** When every CDN-dependent viewer breaks at once across files while self-contained ones work, suspect the gateway/VPN/DNS before touching any calc (Sep 6: a half-dead home gateway mimicked a FileMaker WebKit change; Mail IMAP timeouts were the tell). Test from another device on the same network, then off it.
+17. **Inline libraries beat CDNs in FM web viewers.** Store library source in global fields / Code Library records and emit `"<script>" & source & "</" & "script>"` — charts then render with no internet at all. Pinning is unchanged (the CDN tags were version-pinned anyway); upgrading = paste new source into one place.
 
 ## Data chores (open)
-- OM: **Scroggins, acct 10149** — Prescription holds 36 lines of pasted GLP-1 med-guide text; clear + re-select drug. **Blank record acct 10862** — delete or complete.
-- Terzepatide ghost sweep: ran Aug 21, zero hits — closed.
+- **Scroggins, acct 10149**: Prescription contains 36 lines of pasted GLP-1 med-guide text — clear + re-select drug (likely one of PanelDash's "Other" slice). RV app self-heals on next visit save.
+- **Blank record acct 10862**: no name/DOB/visits — delete or complete.
+- Terzepatide ghost sweep: RAN Aug 21, **zero hits** — closed.
 
 ## Open threads (priority order)
-1. Retire OM old main menu + search layouts once PatientList has a week of trust; same later for Prenatal legacy Search screens once PNList is trusted.
-2. Confirm LifestyleRx v1.0 deployed; consider surfacing it (VisitSummary Copy append, or AVS).
+0. Copy the two E/M-modified prompt calcs (VisitSummary + new-patient prompt) out of Manage Database and bank them in the repo (see Deployed #8).
+1. Retire old main menu + search layouts once PatientList has a week of trust.
+2. Confirm LifestyleRx v1.0 deployed; consider surfacing it (VisitSummary Copy append like MetabolicFlags, or AVS).
 3. ReturnVisit polish (from Aug 20 list): MDMVisits vs ProblemList seed; Doximity card when includePrompt=No; SECA edit-load; double-Save duplicate summary in AI Plan.
-4. PanelDash: decide whether to paste the delivered v1.1 Body/Body2 — repo has deployed v1.0.
-5. PanelDash sixth card; PtDash print script; SaveInterview write-back mapping; Labsbefore->Labs migration question.
+4. PanelDash: decide whether to paste the delivered v1.1 Body/Body2 (legend bottom, single-line breaks) — repo has deployed v1.0.
+5. PanelDash sixth card ("on nothing + not losing"); PtDash print script; SaveInterview write-back mapping; Labsbefore→Labs migration question.
 6. OutreachWorklist: shelved (nurse covers it); revival = filemaker/outreach-worklist/README.md.
-7. Prenatal: optional PNList cache pattern if layout entry still lags after pnkey fix; more prenatal apps as wanted (the DDR gzip trick makes schema refresh easy).
 
 ## Working environment for Claude (rebuild in new session)
-- DDRs: OM latest used Aug 20 evening (pre-MetabolicFlags/LifestyleRx/PatientList — regenerate for current schema); Prenatal Sep 3 (44MB, gzip + stage via connected Downloads folder). UTF-16 -> iconv to UTF-8.
-- Canonical sources + harnesses: both repos are canonical. Local dirs were /home/claude/loc-port (OM: pl_app/test_pl 31 asserts, ow_app/test_ow 36) and /home/claude/prenatal (pn_app/test_pn 24 asserts).
-- obesity-management MCP (patient CRUD) needs FileMaker open on the Mac; no raw-SQL tool — Data Viewer for ad-hoc queries.
-- Iteration protocol unchanged: node harness + FM-eval sim before delivery; app changes = paste Code Library record; verify version tail; one step at a time with screenshots; Export Field Contents (never clipboard) for big field retrieval.
+- DDR: re-upload `Obesity_Management_fmp12.xml` (UTF-16 → iconv to UTF-8). Latest used: Aug 20 evening (post-ReturnVisit; pre-MetabolicFlags/LifestyleRx/PatientList — regenerate for current schema; also predates the Sep 6 de-CDN edits).
+- Canonical sources + harnesses in `/home/claude/loc-port/`: pl_app.js + test_pl.js (31 asserts), ow_app.js + test_ow.js (36), rvapp/RVApp_source.txt, extract/ (DDR calc+script exports). **The repo is now the canonical backup — regenerate locals from github.com/gyndok/lancet-obesity-compass-filemaker.**
+- obesity-management MCP (patient CRUD via AppleScript) needs FileMaker open on the Mac; no raw-SQL tool — use Data Viewer for ad-hoc queries.
+- Iteration protocol unchanged: node harness + FM-eval sim before delivery; app changes = paste Code Library record; verify version tail; one step at a time with screenshots; Export Field Contents (never clipboard) for retrieving big field contents.
 
 ## Conventions
-- Sand/teal design language across all apps: bg #f6f1e7, cards #fff/#e3d8c2, accent #0e5c4a, amber #b45309, red #b91c1c; %TBWL gold >=10 / purple >=20; last-visit red >122d / amber 91-122; GA amber >=37w / red >=40w.
-- Load-bearing names — OM: scripts GoToPatient, SaveInterview, SaveReturnVisit, SaveAIPaste, LoadVisit, RVResetDate, MDMVisits, SetPatientStatus, PLNav; objects rvviewer, plviewer; Code Library keys LOCEngine/LOCQuestions/LOCApp/RVApp/PLApp (+OWApp shelved). Prenatal: script PNNav; object pnviewer; Code Library keys ChartJS/Annotation/PNCApp/PNList; field pnkey.
+- Sand/teal design language: bg #f6f1e7, cards #fff/#e3d8c2 borders, accent #0e5c4a, amber #b45309, red #b91c1c; %TBWL gold ≥10 / purple ≥20; last-visit red >122d / amber 91–122.
+- Load-bearing names: scripts `GoToPatient`, `SaveInterview`, `SaveReturnVisit`, `SaveAIPaste`, `LoadVisit`, `RVResetDate`, `MDMVisits`, `SetPatientStatus`, `PLNav`; viewer objects `rvviewer`, `plviewer` (+ `owviewer` if worklist revived); Code Library Name values are SQL keys: LOCEngine/LOCQuestions/LOCApp/RVApp/PLApp (+OWApp).
 - All viewers: `"data:text/html;base64," & Base64Encode(calc)`, interaction ON, encode OFF, Allow JS to perform FM scripts ON; boot via JSONSetElement+Base64 with b64u() control-char sanitize.
