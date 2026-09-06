@@ -1,0 +1,205 @@
+// de-CDN'd 2026-09-06: chart libraries inlined from global-storage fields
+// Globals::ChartJS_Source (208521 ch) / Globals::Annotation_Source (34251 ch)
+// and OM Code Library record 'Annotation' (34251 ch). Google Fonts links removed.
+// Verified rendering with Wi-Fi off 2026-09-06. NEVER delete these fields/records.
+// weight_progress_calc v3
+// deps: Obesity Management::HeightCalculated, TargetWeight, Weightpounds, CurrentWeight; WeighIn::Weight (Max/Min); HighChartDataForWeeksAndWeight
+// web viewer: "data:text/html," & calc ; interaction ON ; auto-encode OFF ; calc result type Text
+// v2: fixes 1-12 (guards, locale, pinned CDN, BMI axis alignment, gain badge, fixed-height wrap)
+// v3: gap-dash - any line segment spanning > GAP_WEEKS between weigh-ins renders dashed
+Let ( [
+    height = Obesity Management::HeightCalculated;
+    targetWeight = Obesity Management::TargetWeight;
+    startWeight = Obesity Management::Weightpounds;
+    currentWeight = Obesity Management::CurrentWeight;
+    maxWeight = Max ( WeighIn::Weight );
+    minWeight = Min ( WeighIn::Weight );
+
+    // Fix #1: guard against empty/zero fields that would emit invalid JavaScript
+    missingData =
+        IsEmpty ( height ) or height <= 0
+        or IsEmpty ( startWeight ) or startWeight <= 0
+        or IsEmpty ( currentWeight )
+        or IsEmpty ( maxWeight );
+
+    // Fix #9: Round, not Truncate - 4.97% should read 5.0%, not 4.9%
+    pctChange = If ( not missingData ; Round ( ( startWeight - currentWeight ) / startWeight * 100 ; 1 ) );
+
+    // Tolerate an empty TargetWeight instead of breaking yMin
+    yMin = Truncate ( If ( IsEmpty ( targetWeight ) ; minWeight - 20 ; Min ( minWeight - 20 ; targetWeight - 10 ) ) ; 0 );
+    yMax = Truncate ( maxWeight + 20 ; 0 );
+    wNormalLow      = Truncate ( 18.5 * height * height / 703 ; 0 );
+    wNormalHigh     = Truncate ( 24.9 * height * height / 703 ; 0 );
+    wOverweightHigh = Truncate ( 29.9 * height * height / 703 ; 0 );
+    wClass1High     = Truncate ( 34.9 * height * height / 703 ; 0 );
+    wClass2High     = Truncate ( 39.9 * height * height / 703 ; 0 );
+
+    // Fix #6: locale-safe numbers for JS (decimal comma -> point); "null" if no target set
+    jsHeight = Substitute ( GetAsText ( height ) ; "," ; "." );
+    jsTarget = If ( IsEmpty ( targetWeight ) ; "null" ; Substitute ( GetAsText ( targetWeight ) ; "," ; "." ) );
+
+    // Fix #4: gain case gets its own badge instead of "(down-triangle) -2.3% lost"
+    lossBadge = If ( pctChange < 0 ;
+        "<div class='badge amber'>&#9650; " & Abs ( pctChange ) & "% gained from start</div>" ;
+        "<div class='badge green'>&#9660; " & pctChange & "% total weight lost</div>" );
+
+    fallback = "<!DOCTYPE html><html><body style='font-family:sans-serif;background:#f5f7fa;padding:40px;color:#7a8aaa;text-align:center'>"
+        & "Not enough data to chart yet.<br>Height, starting weight, current weight, and at least one weigh-in are required."
+        & "</body></html>";
+
+    html = "<!DOCTYPE html><html><head>"
+        & "<script>" & Globals::ChartJS_Source & "</" & "script>"
+        & "<script>" & Globals::Annotation_Source & "</" & "script>"
+        & "<style>"
+        & "* { box-sizing: border-box; margin: 0; padding: 0; }"
+        & "body { background: linear-gradient(135deg, #f5f7fa, #e8edf5); font-family: Inter, sans-serif; padding: 20px; min-height: 100vh; }"
+        & ".card { background: white; border-radius: 20px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 24px; }"
+        & ".chart-title { font-size: 18px; font-weight: 600; color: #2c3e6b; text-align: center; margin-bottom: 4px; }"
+        & ".chart-subtitle { font-size: 12px; color: #7a8aaa; text-align: center; margin-bottom: 6px; }"
+        & ".badge-row { display: flex; justify-content: center; gap: 12px; margin-bottom: 16px; }"
+        & ".badge { background: #eef2fb; color: #2c3e6b; font-size: 12px; font-weight: 600; padding: 4px 14px; border-radius: 20px; }"
+        & ".badge.green { background: #e6f9f0; color: #1a9e5c; }"
+        & ".badge.amber { background: #fdf3e0; color: #c97a15; }"
+        // Fix #10: fixed-height wrapper + maintainAspectRatio:false - the canvas height attribute was being ignored
+        & ".chart-wrap { position: relative; height: 420px; }"
+        & "</style>"
+        & "</head><body>"
+        & "<div class='card'>"
+        & "<div class='chart-title'>Weight Progress</div>"
+        & "<div class='chart-subtitle'>Pounds tracked over weeks</div>"
+        & "<div class='badge-row'>"
+        & lossBadge
+        & "  <div class='badge'>Started: " & startWeight & " lbs</div>"
+        & "  <div class='badge'>Current: " & currentWeight & " lbs</div>"
+        & "</div>"
+        & "<div class='chart-wrap'><canvas id='weightChart'></canvas></div>"
+        & "</div>"
+        & "<script>"
+        & "const rawData = [" & HighChartDataForWeeksAndWeight & "];"
+        & "const targetWt = " & jsTarget & ";"
+        & "const heightIn = " & jsHeight & ";"
+        & "const yMin = " & yMin & ";"
+        & "const yMax = " & yMax & ";"
+        & "const wNormalLow = " & wNormalLow & ";"
+        & "const wNormalHigh = " & wNormalHigh & ";"
+        & "const wOverweightHigh = " & wOverweightHigh & ";"
+        & "const wClass1High = " & wClass1High & ";"
+        & "const wClass2High = " & wClass2High & ";"
+        // Fix #5: BMI axis computed in JS, untruncated - exact linear alignment with the weight axis
+        & "const bmiMin = 703 * yMin / (heightIn * heightIn);"
+        & "const bmiMax = 703 * yMax / (heightIn * heightIn);"
+        & "const weightToBMI = w => parseFloat((703 * w / (heightIn * heightIn)).toFixed(1));"
+        & "const points = rawData.map(d => ({ x: d[0], y: d[1] }));"
+        & "const n = rawData.length;"
+        // Fix #12: shrink points when the history gets long
+        & "const ptRadius = n > 40 ? 3 : 6;"
+        // v3: dash any segment spanning more than GAP_WEEKS so data gaps announce themselves
+        & "const GAP_WEEKS = 8;"
+        & "const datasets = [{ label: 'Weight (lbs)', data: points, borderColor: '#3b6fd4', borderWidth: 3,"
+        & "  fill: true, tension: 0.4,"
+        & "  segment: { borderDash: s => s.p1.parsed.x - s.p0.parsed.x > GAP_WEEKS ? [6,6] : undefined },"
+        // Fix #11: gradient sized to the actual chart area instead of a hardcoded 400px
+        & "  backgroundColor: function(context) {"
+        & "    const chart = context.chart; const area = chart.chartArea;"
+        & "    if (!area) return 'rgba(59,111,212,0.1)';"
+        & "    const g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);"
+        & "    g.addColorStop(0, 'rgba(59,111,212,0.25)'); g.addColorStop(1, 'rgba(59,111,212,0)');"
+        & "    return g; },"
+        & "  pointBackgroundColor: '#3b6fd4', pointBorderColor: '#ffffff', pointBorderWidth: 2,"
+        & "  pointRadius: ptRadius, pointHoverRadius: ptRadius + 2,"
+        & "  pointHoverBackgroundColor: '#2c3e6b', yAxisID: 'y' }];"
+        // Fix #2: trend line only when regression is defined (2+ points, 2+ distinct weeks)
+        & "if (n >= 2) {"
+        & "  const xs = rawData.map(d => d[0]); const ys = rawData.map(d => d[1]);"
+        & "  const sumX = xs.reduce((a,v) => a+v, 0); const sumY = ys.reduce((a,v) => a+v, 0);"
+        & "  const sumXY = xs.reduce((a,v,i) => a+v*ys[i], 0); const sumX2 = xs.reduce((a,v) => a+v*v, 0);"
+        & "  const denom = n*sumX2 - sumX*sumX;"
+        & "  if (denom !== 0) {"
+        & "    const slope = (n*sumXY - sumX*sumY) / denom;"
+        & "    const intercept = (sumY - slope*sumX) / n;"
+        & "    datasets.push({ label: 'Trend', data: rawData.map(d => ({ x: d[0], y: parseFloat((slope*d[0]+intercept).toFixed(1)) })),"
+        & "      borderColor: '#f0a500', borderWidth: 2, borderDash: [6,4], backgroundColor: 'transparent',"
+        & "      fill: false, tension: 0, pointRadius: 0, pointHoverRadius: 0, yAxisID: 'y' });"
+        & "  }"
+        & "}"
+        & "const annotations = {"
+        & "  zoneNormal: { type: 'box', yMin: wNormalLow, yMax: wNormalHigh,"
+        & "    backgroundColor: 'rgba(46,204,113,0.08)', borderColor: 'rgba(46,204,113,0.3)', borderWidth: 1,"
+        & "    label: { display: true, content: 'Normal (BMI 18.5-24.9)', position: { x: 'start', y: 'center' },"
+        & "      color: 'rgba(46,204,113,0.8)', font: { size: 10, family: 'Inter', weight: '600' } } },"
+        & "  zoneOverweight: { type: 'box', yMin: wNormalHigh, yMax: wOverweightHigh,"
+        & "    backgroundColor: 'rgba(241,196,15,0.08)', borderColor: 'rgba(241,196,15,0.3)', borderWidth: 1,"
+        & "    label: { display: true, content: 'Overweight (BMI 25-29.9)', position: { x: 'start', y: 'center' },"
+        & "      color: 'rgba(201,156,15,0.8)', font: { size: 10, family: 'Inter', weight: '600' } } },"
+        & "  zoneClass1: { type: 'box', yMin: wOverweightHigh, yMax: wClass1High,"
+        & "    backgroundColor: 'rgba(230,126,34,0.08)', borderColor: 'rgba(230,126,34,0.3)', borderWidth: 1,"
+        & "    label: { display: true, content: 'Class 1 Obesity (BMI 30-34.9)', position: { x: 'start', y: 'center' },"
+        & "      color: 'rgba(230,126,34,0.8)', font: { size: 10, family: 'Inter', weight: '600' } } },"
+        & "  zoneClass2: { type: 'box', yMin: wClass1High, yMax: wClass2High,"
+        & "    backgroundColor: 'rgba(192,57,43,0.08)', borderColor: 'rgba(192,57,43,0.3)', borderWidth: 1,"
+        & "    label: { display: true, content: 'Class 2 Obesity (BMI 35-39.9)', position: { x: 'start', y: 'center' },"
+        & "      color: 'rgba(192,57,43,0.8)', font: { size: 10, family: 'Inter', weight: '600' } } },"
+        & "  zoneClass3: { type: 'box', yMin: wClass2High, yMax: yMax,"
+        & "    backgroundColor: 'rgba(136,8,8,0.08)', borderColor: 'rgba(136,8,8,0.3)', borderWidth: 1,"
+        & "    label: { display: true, content: 'Class 3 Obesity (BMI 40+)', position: { x: 'start', y: 'center' },"
+        & "      color: 'rgba(136,8,8,0.8)', font: { size: 10, family: 'Inter', weight: '600' } } }"
+        & "};"
+        // Goal line only when a target is set; Fix #7: label shows the target's ACTUAL BMI, not a hardcoded 25
+        & "if (targetWt !== null) {"
+        & "  annotations.targetLine = { type: 'line', yMin: targetWt, yMax: targetWt,"
+        & "    borderColor: '#2ecc71', borderWidth: 2, borderDash: [8,4],"
+        & "    label: { display: true, content: 'Goal: ' + targetWt + ' lbs (BMI ' + weightToBMI(targetWt) + ')',"
+        & "      position: 'start', yAdjust: -14, backgroundColor: '#2ecc71', color: '#ffffff',"
+        & "      font: { family: 'Inter', size: 11, weight: '600' },"
+        & "      padding: { top: 4, bottom: 4, left: 8, right: 8 }, borderRadius: 6 } };"
+        & "}"
+        & "new Chart(document.getElementById('weightChart'), {"
+        & "  type: 'line',"
+        & "  data: { datasets: datasets },"
+        & "  options: {"
+        & "    responsive: true,"
+        & "    maintainAspectRatio: false,"
+        & "    animation: { duration: 1000, easing: 'easeInOutQuart' },"
+        & "    plugins: {"
+        & "      legend: { display: true, position: 'bottom',"
+        & "        labels: { color: '#2c3e6b', font: { family: 'Inter', size: 12 }, usePointStyle: true, padding: 20 } },"
+        & "      tooltip: {"
+        & "        backgroundColor: '#2c3e6b', titleColor: '#a0b0d0', bodyColor: '#ffffff',"
+        & "        bodyFont: { size: 13, weight: '600' }, padding: 12, cornerRadius: 10, displayColors: false,"
+        & "        callbacks: {"
+        & "          title: function(items) { return 'Week ' + items[0].parsed.x; },"
+        & "          label: function(item) {"
+        & "            if (item.dataset.label === 'Trend') return 'Trend: ' + item.parsed.y + ' lbs';"
+        & "            return item.parsed.y + ' lbs  |  BMI ' + weightToBMI(item.parsed.y);"
+        & "          }"
+        & "        }"
+        & "      },"
+        & "      annotation: { annotations: annotations }"
+        & "    },"
+        & "    scales: {"
+        & "      x: {"
+        & "        type: 'linear',"
+        & "        title: { display: true, text: 'Weeks', color: '#7a8aaa', font: { size: 12, family: 'Inter' } },"
+        & "        grid: { color: '#f0f2f7' },"
+        & "        ticks: { color: '#7a8aaa', font: { family: 'Inter' }, callback: function(val) { return 'Wk ' + val; } }"
+        & "      },"
+        & "      y: {"
+        & "        min: yMin, max: yMax,"
+        & "        title: { display: true, text: 'Weight (lbs)', color: '#7a8aaa', font: { size: 12, family: 'Inter' } },"
+        & "        grid: { color: '#f0f2f7' },"
+        & "        ticks: { color: '#7a8aaa', font: { family: 'Inter' }, callback: function(val) { return val + ' lbs'; } }"
+        & "      },"
+        & "      yBMI: {"
+        & "        position: 'right',"
+        & "        min: bmiMin, max: bmiMax,"
+        & "        title: { display: true, text: 'BMI', color: '#7a8aaa', font: { size: 12, family: 'Inter' } },"
+        & "        grid: { drawOnChartArea: false },"
+        & "        ticks: { color: '#7a8aaa', font: { family: 'Inter' }, callback: function(val) { return val.toFixed(1); } }"
+        & "      }"
+        & "    }"
+        & "  }"
+        & "});"
+        & "</" & "script>"
+        & "</body></html>"
+];
+If ( missingData ; fallback ; html ) )
