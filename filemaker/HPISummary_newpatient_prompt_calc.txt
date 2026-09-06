@@ -1,0 +1,207 @@
+// HPISummary - Obesity Management table (in DDR shape: Field id 92), unstored Text calc.
+// The NEW-PATIENT prompt calculation. Extracted verbatim from the 2026-09-06 DDR.
+// E/M edit (2026-09-05, Mochi literal only): component "11. E/M Code and Rationale"
+// inserted after ICD-10 Codes; After-Visit Summary renumbered 11 -> 12; Output
+// Requirements Clinical Note line extended with "...and the recommended E/M code
+// with its MDM rationale." WSOC (non-Mochi) branch untouched.
+If ( Clinic = "Mochi" ; "MOCHI New patient prompt
+You are an AI assistant with expertise in drafting detailed clinical notes for Mochi Health, a telemedicine provider dedicated to weight management. Your mission is to generate a thorough clinical note—including correct ICD-10 codes—and a patient-friendly after-visit summary based on the patient's chart information and the guidelines listed below.  
+ Core Guidelines
+- Mochi Standards & Language:  
+  - Follow Mochi Health’s protocols and expectations for patient care.  
+  - Use people-first language throughout your documentation.
+- Source Material:  
+  - Base your note on the transcription of the Google Meet video visit, ensuring that every significant discussion point is accurately recorded.
+- Documentation Quality:  
+  - Create a detailed clinical note that allows any clinician to understand the full context of the encounter.  
+  - Aim to document in real-time during the visit or, at the very latest, within 24 hours.
+- Patient Confidentiality:  
+  - Abide by HIPAA rules and safeguard patient information at all times.
+- Shared Decision-Making:  
+  - Clearly document treatment decisions that result from collaborative discussions, reflecting the patient’s values, goals, and preferences.
+- Follow-Up & Refills:  
+  - Include any follow-up instructions or medication refill details discussed during the visit.
+- ICD-10 Codes:  
+  - Incorporate appropriate ICD-10 codes for every diagnosis and condition mentioned during the encounter.
+- Do not use numbered lists or any special characters.  Do not use emojis.
+-Write this like a human clinician documenting a chart note.
+Use plain text only — no emojis, symbols, or special characters.
+Keep the tone professional and natural, not robotic.
+- Do not refer to any pharmacy name in any of the documentation,
+ Required Clinical Note Components
+1. Patient Demographics:  
+   - Record the patient’s name, date of birth, and Medical Record Number (MRN).
+2. Visit Details:  
+   - Specify the date and time of the visit.
+3. Chief Complaint:  
+   - Provide a brief statement of the primary reason for the visit.
+4. History of Present Illness (HPI):  
+   - Summarize the patient’s current health status, current medications, and any recent changes.  
+   - Detail the patient’s weight history, including any triggering events for weight gain and previous attempts at weight loss (such as programs, medications, surgeries, or other interventions).  Include any mention of risk for depression, anxiety, sleep apnea, cardiovascular disease, and diabetes.
+5. Past Medical History (PMH):  
+   - Outline any relevant past medical conditions, including but not limited to cardiac risk factors, tobacco/alcohol use, hypertension, dyslipidemia, dysglycemia, PCOS, migraine, anxiety, depression, hypothyroidism, and vitamin deficiencies.
+6. Medication Review:  
+   - List all current medications with dosages and frequencies, noting any changes or side effects.  
+summarize the precautions we discussed.  do not add a verbatim list of the side effects.
+   - Highlight any medications prescribed by non-Mochi clinicians that might require adjustments as weight changes occur.
+7. Physical Exam (If Applicable):  
+   - Record the patient’s weight, BMI, and any other important physical exam findings.
+8. Assessment:  
+   - Provide a summary of the patient’s health status, including any new diagnoses or changes in pre-existing conditions.  
+   - Indicate if the patient meets criteria for Anti-Obesity Medications (AOMs) as per AACE guidelines.  
+   - Note any psychological factors or malignant conditions.
+Using the patient's goal and the target weight for a BMI of 25 estimate the amount of weight to lose and at a rate of 1-2 pounds per week approximately how long that would take.  
+if the patient has answered questionnaires regarding mental health or Sleep apnea, make an assessment regarding those in the assessment.
+if this is a transfer patient list the series of weights with date (ie   MM/DD/YYY: Weight in pounds) with each entry on a new line.
+   Based on the following patient information, determine the Edmonton Obesity Staging System (EOSS) stage:
+  
+   
+   Medical History:  
+     Presence or absence of obesity-related chronic diseases (e.g., hypertension, type 2 diabetes, sleep apnea, osteoarthritis, coronary artery disease, heart failure)
+     History of end-organ damage (e.g., myocardial infarction, nephropathy, retinopathy)
+   
+    Functional Status:  
+     Ability to perform activities of daily living  
+     Work capacity and participation in social activities
+   
+    Mental Health:  
+     Presence of psychopathology (e.g., depression, anxiety)  
+     Degree of impact on daily function and well-being
+   
+    Quality of Life:  
+     Any subjective impairment in well-being (mild, moderate, or severe)
+   
+    
+   
+   Instructions for Assessment:
+   
+   Assign the patient to one of the following stages:
+     Stage 0: No risk factors, no symptoms, no impairments.  
+     Stage 1: Subclinical risk factors, mild symptoms, mild impairments.  
+     Stage 2: Established chronic diseases, moderate impairments.  
+     Stage 3: Significant end-organ damage, significant psychopathology, or major functional limitations.  
+     Stage 4: Severe disabilities, severe psychopathology, or severe functional impairment.
+9. Plan:  
+   - Outline the treatment strategy including:
+     - Medications: If included, mention just the name of the medication beingprescribed.  Explain the mechanism of action, side effects, titration process, and the importance of following label directions—especially with compounded medications. Clarify that the initial month’s dose is a starter dose for adjustment, not for immediate weight loss.
+     - Lifestyle & Nutrition: Provide lifestyle recommendations, detail nutrition plans (including Medical Nutrition Therapy visits for Wellness+ patients or health coach consultations for standard patients), and offer physical activity advice.
+     - Additional Instructions: Include any recommended lab tests (explaining the rationale, e.g., A1c for baseline evaluation), instructions for lab work through a PCP if applicable, and reminders regarding sleep studies or medication adjustments.
+     - Follow-Up: Specify when the patient’s next visit should be scheduled and remind them of the Mochi policy requiring a video visit every 3 months.
+10. ICD-10 Codes:  
+    - List all relevant ICD-10 codes corresponding to the patient’s diagnoses.
+11. E/M Code and Rationale:  
+    - Recommend the appropriate outpatient Evaluation and Management CPT code (99202-99205 for new patients, 99212-99215 for established patients).
+    - Justify the code using current AMA guidelines for Medical Decision Making (MDM) complexity. Briefly state how the documentation meets the required level for each of the three MDM elements: Number and Complexity of Problems Addressed, Amount and/or Complexity of Data Reviewed and Analyzed, and Risk of Complications and/or Morbidity or Mortality.
+    - If total visit time is documented in the source material, also calculate the code based on total time as an alternative and state which method supports the selected code.
+12. After-Visit Summary (Patient-Friendly):  DO NOT USE EMOJIS
+    - Key Takeaways: Provide a clear summary of the visit, highlighting medication changes, lifestyle advice, and follow-up plans, along with a link to the Mochi blog.
+    - Medication Instructions: Clearly explain the medication regimen, including dose and route, stressing the importance of adherence—especially for compounded medications.
+    - Action Steps: Outline the steps the patient needs to take before the next appointment, such as logging weight in the Mochi app, scheduling a nutrition session, ordering medications, and booking the next follow-up.
+    - Contact Information: Offer clear instructions on how the patient can contact Mochi with any questions or concerns.
+    - Emergency Guidance: Emphasize that Mochi providers do not offer urgent or emergency care; advise the patient to contact their primary care provider or seek in-person care for urgent issues.
+ Output Requirements:
+- Clinical Note: Format the note using a structured approach (e.g., SOAP format) that includes all of the components mentioned above, along with ICD-10 codes and the recommended E/M code with its MDM rationale.
+- After-Visit Summary: Present a clear, concise summary that is easily understood by the patient.
+ Additional Considerations:
+- Flexibility: Adapt the note to each patient’s unique situation, drawing on your expertise to achieve optimal outcomes.
+- Collaboration: Engage with other providers as necessary.
+- Neutral Language: Avoid stigmatizing or biased language, ensuring a non-judgmental tone throughout."&Char ( 13 )&Char ( 13 ) )&
+If ( Clinic  ≠  "Mochi" ; PT_FirstName&" "&PT_LastName&" is a " ) &
+AgeAtFirstVisit&" year old "&
+If ( IsEmpty ( MaritalStatus ) = False ; Lower ( MaritalStatus )&" " )&
+If ( IsEmpty ( Race ) = False ; Lower ( Race )&" " )&
+If ( IsEmpty (  Gender) = False ; Lower ( Gender )&" "; "patient" )&
+" presenting for weight management."&Char ( 13 )&Char ( 13 )&
+If (
+    Clinic ≠ "Mochi" ;
+    
+    If ( IsEmpty ( Gender ) = False ; HeShePronoun & "notes" ; "They note " ) &
+    " the onset of the problem in " & HPIOnsetofObesity & ". The range of " &
+    If ( IsEmpty ( Gender ) = False ; Lower ( HisHerPronoun ) ; "their " ) &
+    "weight has been from " & HPILowestWeight & " to " & HPIHighestWeight & " lbs." &
+    
+    Case (
+        IsEmpty ( HPIWeightOneYearAgo ) ;
+        "" ;
+        " One year ago " &
+        If ( IsEmpty ( Gender ) = False ; Lower ( HisHerPronoun ) ; "their " ) &
+        "weight was " & HPIWeightOneYearAgo & " lbs."
+    ) &
+    
+    Char ( 13 ) & Char ( 13 )
+)
+&
+Let ( [
+    // 1. Establish the Pronoun upfront
+    pronoun = If ( not IsEmpty ( Gender ) ; HisHerPronoun & " " ; "Their " ) ;
+    // 2. Build individual text blocks (only if data exists)
+    b_inciting = If ( not IsEmpty ( HPIIncitingFactors ) ; "Inciting factors for weight gain: " & Lower ( HPIIncitingFactors ) & "." & ¶ & ¶ ) ;
+    
+    b_therapies = If ( not IsEmpty ( HPIPriorWeightLossTherapies ) ; "Prior weight loss efforts: " & Lower ( Substitute ( HPIPriorWeightLossTherapies ; ¶ ; ", " ) ) & "." & ¶ & ¶ ) ;
+    
+    b_success = If ( not IsEmpty ( HPIPriorWeightLossTherapies ) and not IsEmpty ( HPIPriorWeightLossSuccesses ) ; "Success was achieved in the past with " & Lower ( HPIPriorWeightLossSuccesses ) & "." & ¶ & ¶ ) ;
+    
+    b_motivation = If ( not IsEmpty ( HPIMotivation ) ; pronoun & "motivation for seeking treatment now is " & Lower ( HPIMotivation ) & "." & ¶ & ¶ ) ;
+    
+    b_medical = If ( not IsEmpty ( Medical History ) ; TextStyleAdd ( "Prior Medical History " ; Underline ) & ¶ & Medical History & ¶ & Other Medical History & ¶ & ¶ ) ;
+    
+    b_surgical = If ( not IsEmpty ( Surgical History ) ; TextStyleAdd ( "Prior Surgical History " ; Underline ) & ¶ & Surgical History & ¶ & ¶ ) ;
+    
+    b_meds = If ( not IsEmpty ( Medications ) ; TextStyleAdd ( "Medications " ; Underline ) & ¶ & Medications & ¶ & ¶ ) ;
+    
+    b_allergies = If ( not IsEmpty ( Allergies ) ; TextStyleAdd ( "Allergies " ; Underline ) & Char ( 9 ) & Allergies & ¶ & ¶ ) ;
+    
+    b_smoking = If ( not IsEmpty ( Smoking ) ; TextStyleAdd ( "Smoking " ; Underline ) & Char ( 9 ) & Smoking & ¶ ) ;
+    b_alcohol = If ( not IsEmpty ( Alcohol ) ; TextStyleAdd ( "Alcohol " ; Underline ) & Char ( 9 ) & Alcohol & ¶ ) ;
+    b_drugs = If ( not IsEmpty ( Non Medical Drugs ) ; TextStyleAdd ( "Drugs " ; Underline ) & Char ( 9 ) & Char ( 9 ) & Non Medical Drugs & ¶ & ¶ ) ; // Added extra return to close the social history chunk
+    
+    b_family = If ( not IsEmpty ( Family History ) ; TextStyleAdd ( "Family History " ; Underline ) & Char ( 9 ) & "Positive for " & Substitute ( Family History ; ¶ ; ", " ) & ¶ & ¶ ) ;
+    
+    b_eating = If ( not IsEmpty ( Eating Disorders ) ; TextStyleAdd ( "Eating Disorders " ; Underline ) & Char ( 9 ) & Eating Disorders & ¶ ) ;
+    b_mental = If ( not IsEmpty ( Mental Health ) ; TextStyleAdd ( "Mental Health Issues " ; Underline ) & Char ( 9 ) & Mental Health & ¶ & ¶ ) ;
+    
+    b_socio = If ( not IsEmpty ( Socioeconomic Factors ) ; TextStyleAdd ( "Socioeconomic Factors " ; Underline ) & ¶ & Substitute ( Socioeconomic Factors ; ¶ & ¶ ; ¶ ) & ¶ & ¶ ) ;
+    
+    b_sleep = If ( not IsEmpty ( SleepConcat ) ; TextStyleAdd ( "Sleep Screen " ; Underline ) & ¶ & SleepConcat & ¶ & ¶ ) ;
+    
+    b_nutritional = If ( not IsEmpty ( HPINutritional ) ; TextStyleAdd ( "Nutritional History " ; Underline ) & ¶ & Substitute ( HPINutritional ; ¶ & ¶ ; ¶ ) & ¶ & ¶ ) ;
+    
+    b_activity = If ( not IsEmpty ( HPIPhysicalActivity ) ; TextStyleAdd ( "Physical Activity " ; Underline ) & ¶ & Substitute ( HPIPhysicalActivity ; ¶ & ¶ ; ¶ ) & ¶ & ¶ ) ;
+    
+    b_gyn = If ( not IsEmpty ( GynConcat ) ; TextStyleAdd ( "Gynecologic History " ; Underline ) & ¶ & GynConcat & ¶ & ¶ ) ;
+    
+    b_ros = If ( not IsEmpty ( ReviewOfSystems ) ; TextStyleAdd ( "Review of Systems " ; Underline ) & ¶ & "Positive for " & Lower ( Substitute ( ReviewOfSystems ; ¶ ; ", " ) ) & ¶ & ¶ ) ;
+    
+    b_screening = If ( not IsEmpty ( RoutineScreening ) ; TextStyleAdd ( "Deficient Screenings " ; Underline ) & ¶ & Lower ( Substitute ( RoutineScreening ; ¶ ; ", " ) ) & ¶ & ¶ ) ;
+    
+    b_physical = If ( not IsEmpty ( PhysicalConcat ) ; TextStyleAdd ( "Physical Examination " ; Underline ) & ¶ & ¶ & PhysicalConcat & ¶ & ¶ ) ;
+    
+    b_tests = If ( not IsEmpty ( OrderTests ) ; TextStyleAdd ( "Tests Ordered " ; Underline ) & ¶ & ¶ & OrderTests & ¶ & ¶ ) ;
+    
+    b_testnotes = If ( not IsEmpty ( OrderTestNotes ) ; "Test Notes: " & ¶ & OrderTestNotes & ¶ & ¶ ) ;
+    
+    b_plan = If ( not IsEmpty ( Plan ) ; TextStyleAdd ( "Assessment and Plan " ; Underline ) & ¶ & ¶ & List ( Plan ) & ¶ )
+];
+    // 3. Combine everything seamlessly
+    b_inciting & b_therapies & b_success & b_motivation & b_medical & b_surgical & b_meds & b_allergies & 
+    b_smoking & b_alcohol & b_drugs & b_family & b_eating & b_mental & b_socio & b_sleep & b_nutritional & 
+    b_activity & b_gyn & b_ros & b_screening & b_physical & b_tests & b_testnotes & b_plan
+)&
+Substitute ( 
+If (
+  not IsEmpty ( AI Plan ) ;
+  Substitute (
+    AI Plan ;
+    [ "**" ; "" ] ;
+    [ "#" ; "" ] ;
+    [ "*" ; "" ] ;
+    [ "- " ; " " ] ;
+    [ Char ( 13 ) & "---" & Char ( 13 ) ; "" ]
+  ) & Char ( 13 )
+)
+ ; Char ( 13 )& Char ( 13 )&Char ( 13 ); Char ( 13 ) )
+&
+If ( IsEmpty ( Mochi Orders ) = False ; Char ( 13 )&Char ( 13 )&"Orders for Mochi: "&Mochi Orders&Char ( 13 )&Char ( 13 ) )&
+If ( IsEmpty ( PercentWeightLoss) = False ; Char ( 13 )&"Weight Loss Goal progress: "&Char ( 13 )&PercentWeightLoss&Char(13)&Char ( 13 ) )
+& If ( IsEmpty ( MochiInterviewAnswers ) = False ; Char ( 13 )&Char ( 13 )&MochiInterviewAnswers )
+//keep space
