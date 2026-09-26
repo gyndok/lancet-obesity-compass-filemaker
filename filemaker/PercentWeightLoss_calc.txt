@@ -1,0 +1,61 @@
+// PercentWeightLoss - Obesity Management, field id 100, Text calc.
+// The patient progress summary block (also feeds the new-patient prompt via
+// HPISummary's "Weight Loss Goal progress:" section and layout display).
+// v2 (2026-09-26): adds HPIHighestWeight (self-reported pre-enrollment peak)
+// when present AND greater than the enrolled Weightpounds: a header line plus
+// a from-the-high loss figure in the progress section (that line also requires
+// peak > current weight). Blank/invalid peak: output identical to v1.
+// Deployed as pasted; the two commented-out v0 drafts were dropped.
+
+Let ( [
+    ~peak  = If ( not IsEmpty ( HPIHighestWeight ) and GetAsNumber ( HPIHighestWeight ) > Weightpounds ;
+                  GetAsNumber ( HPIHighestWeight ) ; "" ) ;
+    ~lastW = Last ( WeighIn::Weight )
+] ;
+
+// --- SECTION: HIGHEST REPORTED WEIGHT (only when valid) ---
+If ( ~peak ≠ "" ;
+    "Highest Reported Weight: " & ~peak & " lbs (self-reported, pre-enrollment)" & Char (13) ;
+    "" ) &
+
+"Starting Weight: " & Weightpounds & " lbs at BMI: " & BMI_Initial & " (" & DateOfFirstVisit & ")"
+& Char (13) &
+"Current Weight: " & CurrentWeight & " lbs.  BMI: " & CurrentBMI &
+
+// --- SECTION: PROGRESS (Only shows after the first visit) ---
+If ( Count ( WeighIn::Weight ) > 1 ;
+    Char (13) &
+    Truncate ( ((Weightpounds - ~lastW) / Weightpounds) * 100 ; 1 ) & "% weight loss at " &
+    Truncate ( GetNthRecord ( WeighIn::WeeksSince ; Count ( WeighIn::WeeksSince ) - 1 ) ; 0 ) & " weeks." & Char (13) &
+    "Down " & Weightpounds - ~lastW & " lbs so far." &
+    If ( ~peak ≠ "" and ~peak > ~lastW ;
+        Char (13) & "From reported high of " & ~peak & ": down " & ( ~peak - ~lastW ) & " lbs (" &
+        Truncate ( ( ~peak - ~lastW ) / ~peak * 100 ; 1 ) & "% total)." ;
+        "" )
+    ; ""
+) &
+
+// --- SECTION: GOAL & PROJECTION (Always shows) ---
+Char (13) &
+"Target Weight: " & TargetWeight & " lbs (BMI = 25)" & Char (13) &
+"Pounds to lose: " & (CurrentWeight - TargetWeight) & " lbs" & Char (13) &
+"Estimated time to goal: " & Truncate ( (CurrentWeight - TargetWeight) / 1.5 ; 1 ) & " weeks (at 1.5 lbs/week)" &
+
+Char (13) & Char (13) &
+
+// --- SECTION: LAST VISIT FOOTER ---
+Let ( [
+    lastWeighInDate = GetNthRecord ( WeighIn::Date ; Count ( WeighIn::Date ) - 1 ) ;
+    daysAgo = Get ( CurrentDate ) - lastWeighInDate ;
+    daysText = Case (
+        daysAgo = 0 ; "today" ;
+        daysAgo = 1 ; "1 day ago" ;
+        daysAgo > 1 ; daysAgo & " days ago"
+    ) ;
+    coloredDaysText = If ( daysAgo ≥ 42 ; TextColor ( daysText ; RGB (255 ; 0 ; 0 ) ) ; daysText )
+] ;
+    "Last weigh-in was " & coloredDaysText &
+    If ( daysAgo ≠ 0 ; " on " & lastWeighInDate ; "" )
+)
+
+)
