@@ -1,0 +1,107 @@
+// PtDash_Body2 v2.1 - Obesity Management, result Text, can be stored or
+// unstored (it references NO fields - pure string). Third segment of the
+// dashboard. Web viewer address is now:
+//   "data:text/html," & PtDash_Head & PtDash_Body & PtDash_Body2
+// JS globals (W, V, S, M, labRaw, RX, PT, helpers) are declared with top-level
+// const in PtDash_Body's script block and remain visible here - same global
+// lexical environment across script blocks.
+"<script>"
+// ---------- metabolic ----------
+& "sec('metabolic', function(){ const el = $('metab');"
+& "  const ho = latest(V, 'homa'), gl = latest(V, 'glu'), fi = latest(V, 'fib4');"
+& "  if (!ho && !gl && !fi && !labRaw.trim()) { el.innerHTML = ghost('No metabolic labs recorded',"
+& "    'Fasting glucose, insulin, HOMA-IR, FIB-4, and lab reports appear here once entered'); return; }"
+& "  const DEFS = ["
+& "   { n: 'A1c', re: /a1c/, ex: null, lo: 3, hi: 20, f: v => v >= 6.5 ? ['z4','diabetes range'] : v >= 5.7 ? ['z3','prediabetes range'] : ['z1','normal'] },"
+& "   { n: 'ALT', re: /\balt\b/, ex: null, lo: 3, hi: 3000, f: v => { const u = PT.sex && PT.sex.toLowerCase().indexOf('f') === 0 ? 25 : 33;"
+& "     return v >= 3 * u ? ['z4','markedly elevated'] : v > u ? ['z3','above ' + u + ' ULN'] : ['z1','normal']; } },"
+& "   { n: 'AST', re: /\bast\b/, ex: null, lo: 3, hi: 3000, f: v => v >= 120 ? ['z4','markedly elevated'] : v > 40 ? ['z3','elevated'] : ['z1','normal'] },"
+& "   { n: 'TSH', re: /\btsh\b/, ex: null, lo: 0.001, hi: 200, f: v => v > 10 ? ['z4','marked hypothyroid'] : v > 4.5 ? ['z3','high'] : v < 0.4 ? ['z3','low'] : ['z1','normal'] },"
+& "   { n: 'Total cholesterol', re: /cholesterol/, ex: /\bldl\b|\bhdl\b|ratio/, need: /total/, lo: 50, hi: 600, f: v => v >= 240 ? ['z4','high'] : v >= 200 ? ['z3','borderline'] : ['z1','desirable'] },"
+& "   { n: 'LDL', re: /\bldl\b/, ex: /ratio/, lo: 10, hi: 500, f: v => v >= 160 ? ['z4','high'] : v >= 130 ? ['z3','borderline'] : ['z1','optimal/near'] },"
+& "   { n: 'Triglycerides', re: /triglycer/, ex: null, lo: 20, hi: 10000, f: v => v >= 500 ? ['z4','very high'] : v >= 150 ? ['z3','high'] : ['z1','normal'] },"
+// computation-only analytes: parsed but not shown in the FROM LAB REPORTS list
+& "   { n: '_glu', re: /\bglucose\b/, ex: /urine|tolerance|a1c/, lo: 40, hi: 600, f: null },"
+& "   { n: '_ins', re: /\binsulin\b/, ex: /resistance|antibod/, lo: 0.5, hi: 300, f: null },"
+& "   { n: '_plt', re: /platelet/, ex: /clump|function/, lo: 20, hi: 1000, f: null } ];"
+& "  const found = {}, all = {};"
+// v2.0: 'found' keeps the latest value per analyte (for display); 'all' keeps
+// every dated value so derived metrics can pair components from the most
+// recent SAME-DAY draw, even when a newer solo value exists for one of them.
+& "  function pairOn(names) { const lists = names.map(n => (all[n] || []).filter(r => r.d && r.v != null));"
+& "    if (lists.some(l => !l.length)) return null;"
+& "    const dates = lists[0].map(r => r.d.getTime()).sort((a,b) => b-a);"
+& "    for (const t of dates) { const picks = lists.map(l => l.find(r => r.d.getTime() === t));"
+& "      if (picks.every(p => p)) return picks; } return null; }"
+& "  labRaw.split('\n').forEach(line => { const L = line.toLowerCase(); if (!L.trim()) return;"
+& "    DEFS.forEach(d => { if (!d.re.test(L)) return; if (d.ex && d.ex.test(L)) return; if (d.need && !d.need.test(L)) return;"
+& "      const dm = L.match(/^(\d{4}-\d{2}-\d{2})/); const when = dm ? dt(dm[1]) : null;"
+& "      const lm = L.match(d.re); const after = L.slice(lm.index + lm[0].length);"
+& "      const nums = after.match(/\d+\.?\d*/g) || [];"
+& "      let val = null; for (const t of nums) { const v = parseFloat(t); if (v >= d.lo && v <= d.hi) { val = v; break; } }"
+& "      const rec = { v: val, d: when, raw: line.trim() };"
+& "      (all[d.n] = all[d.n] || []).push(rec);"
+& "      const cur = found[d.n];"
+& "      if (!cur || (when && (!cur.d || when > cur.d)) || (!when && !cur.d)) found[d.n] = rec; }); });"
+& "  let h = '';"
+// v1.9: parse labRaw FIRST so the top rows can fall back to lab-derived values
+& "  const lGlu = found['_glu'], lIns = found['_ins'], lPlt = found['_plt'],"
+& "        lAst = found['AST'], lAlt = found['ALT'];"
+& "  function mrow(name, v, cls, txt, when, calc) {"
+& "    h += '<div class=\"row\"><span class=\"k\">' + name + '</span><span class=\"v ' + cls + '\">' + v"
+& "      + '<span class=\"sub2\">' + txt + (calc ? ' · from lab report' : '') + (when ? ' · ' + fmt(when) : '') + '</span></span></div>'; }"
+// fasting glucose: Visits, else lab line
+& "  const gsrc = gl ? { v: gl.v, d: gl.d, lab: false } : (lGlu && lGlu.v != null ? { v: lGlu.v, d: lGlu.d, lab: true } : null);"
+& "  if (gsrc) { const cls = gsrc.v >= 126 ? 'z4' : gsrc.v >= 100 ? 'z3' : 'z1';"
+& "    mrow('Fasting glucose', gsrc.v, cls, cls === 'z1' ? 'normal' : gsrc.v >= 126 ? 'diabetes range' : 'impaired', gsrc.d, gsrc.lab); }"
+& "  else h += row('Fasting glucose', 'not recorded', true);"
+// fasting insulin: Visits, else lab line
+& "  const ins = latest(V, 'ins');"
+& "  const isrc = ins ? { v: ins.v, d: ins.d, lab: false } : (lIns && lIns.v != null ? { v: lIns.v, d: lIns.d, lab: true } : null);"
+& "  if (isrc) { const icls = isrc.v > 25 ? 'z3' : '';"
+& "    mrow('Fasting insulin', isrc.v, icls, isrc.v > 25 ? 'elevated - hyperinsulinemia' : '', isrc.d, isrc.lab); }"
+& "  else h += row('Fasting insulin', 'not recorded', true);"
+// HOMA-IR: Visits, else computed from same-day lab glucose + insulin
+& "  let hoV = ho ? { v: ho.v, d: ho.d, calc: false } : null;"
+& "  if (!hoV) { const p = pairOn(['_glu','_ins']);"
+& "    if (p) hoV = { v: p[0].v * p[1].v / 405, d: p[0].d, calc: true }; }"
+// v2.1 HOMA-IR bands (EAS 2025 consensus framing; no universal cutoff exists):
+// <2.0 insulin sensitive | 2.0-2.49 borderline | >=2.5 IR likely | >=3.0 significant
+& "  if (hoV) { const cls = hoV.v >= 3 ? 'z4' : hoV.v >= 2.5 ? 'z3' : hoV.v >= 2 ? 'z2' : 'z1';"
+& "    const txt = hoV.v < 2 ? 'insulin sensitive' : hoV.v < 2.5 ? 'borderline' : hoV.v < 3 ? 'insulin resistance likely' : 'significant insulin resistance';"
+& "    mrow('HOMA-IR', hoV.v.toFixed(2), cls, txt + (hoV.calc ? ' · calculated' : ''), hoV.d, false); }"
+& "  else h += row('HOMA-IR', 'not calculated', true);"
+// FIB-4: Visits, else age x AST / (platelets x sqrt(ALT)), same-day labs
+& "  let fiV = fi ? { v: fi.v, d: fi.d, calc: false } : null;"
+& "  if (!fiV && PT.age != null) { const p = pairOn(['AST','ALT','_plt']);"
+& "    if (p) fiV = { v: PT.age * p[0].v / (p[2].v * Math.sqrt(p[1].v)), d: p[0].d, calc: true }; }"
+// v2.1 FIB-4 (AASLD guidance): low cutoff 1.3, but 2.0 at age >=65 because age
+// itself inflates FIB-4; >=2.67 high risk; poor accuracy under age 35.
+& "  if (fiV) { const lowCut = PT.age != null && PT.age >= 65 ? 2.0 : 1.3;"
+& "    const cls = fiV.v >= 2.67 ? 'z4' : fiV.v >= lowCut ? 'z3' : 'z1';"
+& "    let txt = fiV.v < lowCut ? 'low risk of advanced fibrosis' : fiV.v < 2.67 ? 'intermediate - consider elastography' : 'high risk - hepatology referral';"
+& "    if (PT.age != null && PT.age >= 65 && fiV.v >= 1.3 && fiV.v < 2.0) txt += ' (age-adjusted cutoff)';"
+& "    if (PT.age != null && PT.age < 35) txt += ' - limited accuracy under 35';"
+& "    mrow('FIB-4', fiV.v.toFixed(2), cls, txt + (fiV.calc ? ' · calculated' : ''), fiV.d, false); }"
+& "  else h += row('FIB-4', 'not calculated', true);"
+// ---- lab-report panel: A1c, ALT, AST, TSH, total chol, LDL, triglycerides ----
+// Parses Labsbefore lines. Primary format 'YYYY-MM-DD - name - value [range]',
+// tolerant of plain dump lines. Word-boundary regexes prevent AST matching
+// 'fasting' and LDL matching VLDL; 'ratio' lines are excluded from LDL.
+// Bounds-check per analyte: out-of-range extraction renders ?? not a number.
+& "  const hits = DEFS.filter(d => found[d.n] && d.n.charAt(0) !== '_');"
+& "  if (hits.length) { h += '<div class=\"labdiv\">From lab reports</div>';"
+& "    hits.forEach(d => { const r = found[d.n];"
+& "      if (r.v == null) { h += row(d.n, '?? <span class=\"sub2\">unparsed - check source</span>', true); return; }"
+& "      const [cls, txt] = d.f(r.v);"
+& "      h += '<div class=\"row\"><span class=\"k\">' + d.n + '</span><span class=\"v ' + cls + '\">' + r.v"
+& "        + '<span class=\"sub2\">' + txt + (r.d ? ' · ' + fmt(r.d) : '') + '</span></span></div>'; }); }"
+& "  else if (labRaw.trim()) h += '<div class=\"labdiv\">From lab reports</div>' + row('Target analytes', 'none found in lab text', true);"
+& "  el.innerHTML = h; });"
+// ---------- medications ----------
+& "sec('medications', function(){ const el = $('meds');"
+& "  const aom = RX ? '<div class=\"aom\"><div class=\"k2\">Current anti-obesity medication</div><div class=\"v2\">' + RX + '</div></div>' : '';"
+& "  if (!M.length && !aom) { el.innerHTML = ghost('No medications on file', 'The medication list appears here once entered'); return; }"
+& "  el.innerHTML = aom + M.map(m => '<div class=\"med\"><b>' + m.med + '</b>' + (m.dose ? ' <span>' + m.dose + '</span>' : '')"
+& "    + (m.ind ? '<br><span>' + m.ind + '</span>' : '') + '</div>').join(''); });"
+& "</" & "script></body></html>"
