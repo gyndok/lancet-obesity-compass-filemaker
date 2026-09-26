@@ -1,0 +1,342 @@
+// PtDash_Body v2.3 - Obesity Management, result Text, UNSTORED
+// v2.3: HPIHighestWeight (self-reported pre-treatment peak, common in Mochi
+// transfers) surfaces in four places when present and valid (> starting
+// weight): header badge, loss-from-peak line in the TBWL tile, a 5th "Peak
+// weight" hero tile (grid widens to 5 columns via JS), and a dashed line on
+// the weight chart. Blank or <= start weight: dashboard renders exactly as v2.2.
+// Half 2 of 2. Web viewer address:  "data:text/html," & PtDash_Head & PtDash_Body
+// Holds the four SQL queries and all JavaScript. Neither half is valid alone.
+// FIELD-NAME NOTES (verified against the DDR, do not "correct" these):
+//   Visits::"grip strenth"   - misspelled in the schema (missing g)
+//   Obesity Management::"grip stregth" - misspelled differently (missing n)
+//   SECA::"Fat Mass" and Visits::"HOMA IR" contain spaces, hence the quoting
+// v1.3: adds the lab-report parser (A1c, ALT, AST, TSH, total cholesterol,
+// LDL, triglycerides from Labsbefore) with per-analyte bounds and color bands,
+// the Prescription field as an AOM header badge, and a highlighted current-AOM
+// row atop the Medications card. Thresholds are commented at the DEFS block -
+// adjust bands there, one line per analyte.
+// v1.2: every render section is wrapped in sec() so one failing panel cannot
+// blank the rest of the dashboard, and the true error text is written to #err
+// instead of the browser's scrubbed cross-origin "Script error."
+// v1.1 FIX: both charts use a LINEAR x-axis over epoch-millisecond timestamps
+// with a tick callback, NOT type:'time'. Chart.js v4 time scales require a
+// separate date-adapter script; without it the chart constructor throws and
+// every section after it silently fails to render.
+// WHtR bands match this file's own "waisttoheight interpretation" calc:
+//   <0.5 healthy, 0.5-0.6 increased risk, >=0.6 substantially increased.
+Let ( [
+    acct = AccountNumber ;
+
+    wRows = ExecuteSQL (
+        "SELECT \"Date\", \"Weight\", \"BMI\" FROM \"WeighIn\"
+         WHERE \"AccountNumber\" = ? AND \"Weight\" IS NOT NULL ORDER BY \"Date\"" ;
+        "|" ; "¶" ; acct ) ;
+
+    vRows = ExecuteSQL (
+        "SELECT \"Date\", \"WaistCircumferenceInches\", \"HipCircumference\",
+                \"NeckCircumferenceInches\", \"BloodPressureSystolic\",
+                \"BloodPressureDiastolic\", \"Pulse\", \"grip strenth\",
+                \"FastingGlucose\", \"FastingInsulin\", \"HOMA IR\", \"FIB4\"
+         FROM \"Visits\" WHERE \"AccountNumber\" = ? ORDER BY \"Date\"" ;
+        "|" ; "¶" ; acct ) ;
+
+    sRows = ExecuteSQL (
+        "SELECT \"Date\", \"Weight\", \"Fat Mass\", \"SkeletalMuscleMass\",
+                \"PercentBodyFat\", \"VAT\"
+         FROM \"SECA\" WHERE \"AccountNumber\" = ? ORDER BY \"Date\"" ;
+        "|" ; "¶" ; acct ) ;
+
+    mRows = ExecuteSQL (
+        "SELECT \"Medication\", \"Dose\", \"Indication\" FROM \"Medications\"
+         WHERE \"AccountNumber\" = ?" ;
+        "|" ; "¶" ; acct ) ;
+
+    // v1.4: EVERY string injected into JavaScript goes through the same scrub:
+    // strip backslashes and both quote types, normalize raw linefeeds (Char 10,
+    // present in automation-populated fields like Labsbefore) to CR, then CR to
+    // a literal backslash-n. A single un-normalized LF inside a JS string
+    // literal is a syntax error that kills the entire script before it runs.
+    wJS = Substitute ( If ( wRows = "?" ; "" ; wRows ) ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; ¶ ] ; [ ¶ ; "\n" ] ) ;
+    vJS = Substitute ( If ( vRows = "?" ; "" ; vRows ) ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; ¶ ] ; [ ¶ ; "\n" ] ) ;
+    sJS = Substitute ( If ( sRows = "?" ; "" ; sRows ) ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; ¶ ] ; [ ¶ ; "\n" ] ) ;
+    mJS = Substitute ( If ( mRows = "?" ; "" ; mRows ) ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; ¶ ] ; [ ¶ ; "\n" ] ) ;
+    labsJS = Substitute ( Labsbefore ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; ¶ ] ; [ ¶ ; "\n" ] ) ;
+    rxJS = Substitute ( Prescription ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; " " ] ; [ ¶ ; " " ] ) ;
+    probJS = Substitute ( ProblemList ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 9 ) ; " " ] ; [ Char ( 10 ) ; ¶ ] ; [ ¶ ; "\n" ] ) ;
+    nameJS = Substitute ( PT_FirstName & " " & PT_LastName ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; " " ] ; [ ¶ ; " " ] ) ;
+    sexJS = Substitute ( Gender ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; " " ] ; [ ¶ ; " " ] ) ;
+    clinicJS = Substitute ( Clinic ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; " " ] ; [ ¶ ; " " ] ) ;
+    statusJS = Substitute ( Status ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; " " ] ; [ ¶ ; " " ] ) ;
+    raceJS = Substitute ( Race ; [ "\\" ; "" ] ; [ "'" ; "" ] ; [ "\"" ; "" ] ; [ Char ( 10 ) ; " " ] ; [ ¶ ; " " ] ) ;
+    ptName = nameJS ;
+    daysLast = If ( IsEmpty ( lastVisit ) ; "" ; Get ( CurrentDate ) - lastVisit )
+] ;
+"<script>"
+& "const wRaw = '" & wJS & "';"
+& "const vRaw = '" & vJS & "';"
+& "const sRaw = '" & sJS & "';"
+& "const mRaw = '" & mJS & "';"
+& "const labRaw = '" & labsJS & "';"
+& "const RX = '" & rxJS & "';"
+& "const probRaw = '" & probJS & "';"
+& "const PT = { name: '" & nameJS & "', acct: '" & acct & "', sex: '" & sexJS & "',"
+& "  ht: " & If ( IsEmpty ( HeightCalculated ) or HeightCalculated <= 0 ; "null" ; HeightCalculated ) & ","
+& "  start: " & If ( IsEmpty ( Weightpounds ) ; "null" ; Weightpounds ) & ","
+& "  hiw: " & If ( IsEmpty ( HPIHighestWeight ) or GetAsNumber ( HPIHighestWeight ) <= 0 ; "null" ; GetAsNumber ( HPIHighestWeight ) ) & ","
+& "  target: " & If ( IsEmpty ( TargetWeight ) ; "null" ; TargetWeight ) & ","
+& "  daysLast: " & If ( IsEmpty ( daysLast ) ; "null" ; daysLast ) & ","
+& "  clinic: '" & clinicJS & "', status: '" & statusJS & "', race: '" & raceJS & "',"
+& "  age: " & If ( IsEmpty ( PT_DOB ) ; "null" ; Truncate ( ( Get ( CurrentDate ) - PT_DOB ) / 365.25 ; 0 ) ) & " };"
+// v2.3: peak only counts when it exceeds the starting weight here - otherwise
+// the self-reported high adds nothing and every peak element stays hidden
+& "const PEAK = (PT.hiw != null && (PT.start == null || PT.hiw > PT.start)) ? PT.hiw : null;"
+// ---------- helpers ----------
+& "const $ = i => document.getElementById(i);"
+// v1.2:each section runs isolated. Catching the error ourselves also defeats the
+// cross-origin scrubbing that turns CDN exceptions into a bare 'Script error.'
+& "function sec(n, f) { try { f(); } catch (e) {"
+& "  const el = $('err'); if (el) el.textContent += n + ': ' + ((e && e.message) ? e.message : e) + '\n'; } }"
+& "const num = s => { const v = parseFloat(String(s).trim()); return isNaN(v) ? null : v; };"
+& "const rows = r => r.split('\n').map(l => l.split('|')).filter(p => p[0] && p[0].trim() !== '');"
+& "const dt = s => { const d = new Date(String(s).trim() + 'T00:00:00'); return isNaN(d.getTime()) ? null : d; };"
+& "const fmt = d => d ? (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear() : '--';"
+& "const ago = d => d ? Math.round((Date.now() - d.getTime()) / 86400000) : null;"
+& "const agoTxt = n => n == null ? '' : n < 60 ? n + ' days ago' : n < 730 ? (n/30.4).toFixed(0) + ' months ago' : (n/365.25).toFixed(1) + ' years ago';"
+// ghost panel: never-collected vs stale vs empty-but-explained
+& "function ghost(msg, sub, stale) { return '<div class=\"ghost' + (stale ? ' stale' : '') + '\">'"
+& "  + '<div class=\"g1\">' + msg + '</div>' + (sub ? '<div class=\"g2\">' + sub + '</div>' : '') + '</div>'; }"
+& "function tile(k, v, u, d, cls, na) { return '<div class=\"tile' + (na ? ' na' : '') + '\"><div class=\"k\">' + k + '</div>'"
+& "  + '<div class=\"v\">' + v + (u ? ' <span class=\"u\">' + u + '</span>' : '') + '</div>'"
+& "  + (d ? '<div class=\"d ' + (cls||'') + '\">' + d + '</div>' : '') + '</div>'; }"
+& "function row(k, v, na) { return '<div class=\"row' + (na ? ' na' : '') + '\"><span class=\"k\">' + k + '</span><span class=\"v\">' + v + '</span></div>'; }"
+// zone class from BMI, matching the weight chart's five bands
+& "const bmiZone = b => b == null ? '' : b < 25 ? 'z1' : b < 30 ? 'z2' : b < 35 ? 'z3' : b < 40 ? 'z4' : 'z5';"
+& "const whtrZone = r => r == null ? '' : r < 0.5 ? 'z1' : r < 0.6 ? 'z3' : 'z4';"
+& "const whtrTxt = r => r == null ? '' : r < 0.5 ? 'Healthy / low risk' : r < 0.6 ? 'Increased risk' : 'Substantially increased risk';"
+// ---------- parse ----------
+& "const W = rows(wRaw).map(p => ({ d: dt(p[0]), w: num(p[1]), bmi: num(p[2]) })).filter(o => o.d && o.w);"
+& "const V = rows(vRaw).map(p => ({ d: dt(p[0]), waist: num(p[1]), hip: num(p[2]), neck: num(p[3]),"
+& "  sbp: num(p[4]), dbp: num(p[5]), pulse: num(p[6]), grip: num(p[7]),"
+& "  glu: num(p[8]), ins: num(p[9]), homa: num(p[10]), fib4: num(p[11]) })).filter(o => o.d);"
+& "const S = rows(sRaw).map(p => ({ d: dt(p[0]), w: num(p[1]), fat: num(p[2]), smm: num(p[3]),"
+& "  pct: num(p[4]), vat: num(p[5]) })).filter(o => o.d);"
+& "const M = rows(mRaw).map(p => ({ med: (p[0]||'').trim(), dose: (p[1]||'').trim(), ind: (p[2]||'').trim() })).filter(o => o.med);"
+// most recent non-null value of a field, with its date
+& "function latest(arr, key) { for (let i = arr.length - 1; i >= 0; i--) { if (arr[i][key] != null) return { v: arr[i][key], d: arr[i].d }; } return null; }"
+// ---------- follow-up banner: red past 4 months, amber 3-4 ----------
+& "sec('banner', function(){ const dl = PT.daysLast; if (dl == null) return;"
+& "  const b = $('banner');"
+& "  if (dl > 122) { b.className = 'banner red'; b.style.display = 'block';"
+& "    b.textContent = 'Not seen in ' + (dl/30.4).toFixed(1) + ' months - lost to follow-up'; }"
+& "  else if (dl > 91) { b.className = 'banner amber'; b.style.display = 'block';"
+& "    b.textContent = 'Last seen ' + (dl/30.4).toFixed(1) + ' months ago - due for follow-up'; } });"
+// ---------- header ----------
+& "$('nm').textContent = PT.name;"
+& "$('sub').textContent = '#' + PT.acct + (PT.age != null ? '  ·  ' + PT.age + ' yo' : '') + (PT.sex ? '  ·  ' + PT.sex : '')"
+& "  + (PT.ht ? '  ·  ' + Math.floor(PT.ht/12) + \"'\" + Math.round(PT.ht%12) + '\"' : '');"
+& "sec('header_badges', function(){ let h = '';"
+& "  if (RX) h += '<span class=\"badge green\">AOM: ' + RX + '</span>';"
+& "  if (PEAK != null) h += '<span class=\"badge amber\">peak ' + PEAK + ' lbs self-reported</span>';"
+& "  if (PT.clinic) h += '<span class=\"badge\">' + PT.clinic + '</span>';"
+& "  if (PT.status) h += '<span class=\"badge\">' + PT.status + '</span>';"
+& "  h += '<span class=\"badge\">' + W.length + ' weigh-ins</span>';"
+& "  h += '<span class=\"badge\">' + V.length + ' visits</span>';"
+// v2.2: weeks in treatment - anchored to the FIRST VISIT date, falling back to
+// the first weigh-in when no visit rows exist yet
+& "  const first = (V.length ? V[0].d : null) || (W.length ? W[0].d : null);"
+& "  if (first) { const wks = Math.floor((Date.now() - first.getTime()) / 604800000);"
+& "    const dur = wks < 9 ? wks + ' weeks' : wks < 104 ? (wks/4.345).toFixed(1).replace(/\.0$/, '') + ' months' : (wks/52.18).toFixed(1) + ' years';"
+& "    h += '<span class=\"badge\">week ' + (wks + 1) + ' of treatment (' + dur + ')</span>'; }"
+& "  if (PT.daysLast != null) h += '<span class=\"badge' + (PT.daysLast > 122 ? ' red' : PT.daysLast > 91 ? ' amber' : '') + '\">last visit ' + agoTxt(PT.daysLast) + '</span>';"
+& "  $('badges').innerHTML = h; });"
+// ---------- hero tiles ----------
+& "sec('hero_tiles', function(){ let h = '';"
+& "  const last = W.length ? W[W.length-1] : null;"
+& "  if (last) { const st = ago(last.d);"
+& "    h += tile('Current weight', last.w.toFixed(1), 'lbs', st > 60 ? 'measured ' + agoTxt(st) : fmt(last.d), st > 60 ? 'z3' : ''); }"
+& "  else h += tile('Current weight', 'no weigh-ins', '', '', '', true);"
+// % total body weight loss - the efficacy metric
+& "  if (last && PT.start) { const p = (PT.start - last.w) / PT.start * 100;"
+& "    const cls = p >= 10 ? 'z1' : p >= 5 ? 'z2' : p < 0 ? 'z4' : '';"
+& "    let d2 = (p >= 0 ? (PT.start - last.w).toFixed(1) + ' lbs from ' + PT.start : 'gained ' + (last.w - PT.start).toFixed(1) + ' lbs');"
+& "    if (PEAK != null && PEAK > last.w) { const pp = (PEAK - last.w) / PEAK * 100;"
+& "      d2 += '<br>from high of ' + PEAK + ': −' + (PEAK - last.w).toFixed(1) + ' lb (' + pp.toFixed(1) + '%)'; }"
+& "    h += tile('Total body wt loss', (p >= 0 ? '' : '+') + Math.abs(p).toFixed(1) + '%', '', d2, cls); }"
+& "  else h += tile('Total body wt loss', 'no baseline', '', '', '', true);"
+& "  const bmi = last && PT.ht ? 703 * last.w / (PT.ht * PT.ht) : null;"
+& "  if (bmi) h += tile('Current BMI', bmi.toFixed(1), '', PT.target ? 'goal ' + PT.target + ' lbs (BMI 25)' : '', bmiZone(bmi));"
+& "  else h += tile('Current BMI', 'no height', '', '', '', true);"
+// waist-to-height, most recent recorded waist
+& "  const wa = latest(V, 'waist');"
+& "  if (wa && PT.ht) { const r = wa.v / PT.ht; const st = ago(wa.d);"
+& "    h += tile('Waist / height', r.toFixed(2), '', whtrTxt(r) + (st > 180 ? ' (' + agoTxt(st) + ')' : ''), whtrZone(r)); }"
+& "  else h += tile('Waist / height', 'not measured', '', '', '', true);"
+& "  if (PEAK != null) { h += tile('Peak weight', PEAK.toFixed(1), 'lbs', 'self-reported, pre-treatment', '');"
+& "    $('stats').style.gridTemplateColumns = 'repeat(5, 1fr)'; }"
+& "  $('stats').innerHTML = h; });"
+// ---------- problem list chips ----------
+// Derived risk flags from the ProblemList calc itself (STOP-BANG, FIB-4,
+// current smoking) render amber; everything else neutral.
+& "sec('problems', function(){ const el = $('probs');"
+& "  const items = probRaw.split('\n').map(x => x.trim()).filter(x => x);"
+& "  if (!items.length) { el.innerHTML = ghost('No problems recorded',"
+& "    'The problem list appears here once history is entered'); return; }"
+& "  const hot = /stop-bang|fib-4|current.*smok|smok.*current/i;"
+& "  el.innerHTML = items.map(p => '<span class=\"chip' + (hot.test(p) ? ' amber' : '') + '\">' + p + '</span>').join(''); });"
+// ---------- weight chart with BMI zones ----------
+& "sec('weight_chart', function(){ if (!W.length) return;"
+& "  const pts = W.map(o => ({ x: o.d.getTime(), y: o.w }));"
+& "  const ys = W.map(o => o.w);"
+& "  const yMin = Math.floor(Math.min(...ys, PT.target || Infinity) - 10);"
+& "  const yMax = Math.ceil(Math.max(...ys, PEAK != null ? PEAK : -Infinity) + 10);"
+& "  const ann = {};"
+& "  if (PT.ht) { const wf = b => 703 === 0 ? 0 : b * PT.ht * PT.ht / 703;"
+& "    const bands = [[0,25,'rgba(46,204,113,.10)'],[25,30,'rgba(241,196,15,.10)'],[30,35,'rgba(230,126,34,.10)'],[35,40,'rgba(192,57,43,.10)'],[40,99,'rgba(136,8,8,.10)']];"
+& "    bands.forEach((b, i) => { ann['z'+i] = { type: 'box', yMin: wf(b[0]), yMax: wf(b[1]), backgroundColor: b[2], borderWidth: 0 }; });"
+& "    if (PT.target) ann.goal = { type: 'line', yMin: PT.target, yMax: PT.target, borderColor: '#2ecc71', borderWidth: 2, borderDash: [8,4],"
+& "      label: { display: true, content: 'Goal ' + PT.target + ' lbs', position: 'start', backgroundColor: '#2ecc71', color: '#fff', font: { family: 'Inter', size: 10, weight: '600' }, borderRadius: 5 } }; }"
+& "  if (PEAK != null) ann.peak = { type: 'line', yMin: PEAK, yMax: PEAK, borderColor: '#d4761c', borderWidth: 2, borderDash: [8,4],"
+& "    label: { display: true, content: 'Peak ' + PEAK + ' lbs (reported)', position: 'end', backgroundColor: '#d4761c', color: '#fff', font: { family: 'Inter', size: 10, weight: '600' }, borderRadius: 5 } };"
+& "  new Chart($('wchart'), { type: 'line',"
+& "    data: { datasets: [{ label: 'Weight', data: pts, borderColor: '#3b6fd4', borderWidth: 3, tension: .35, fill: true,"
+& "      backgroundColor: c => { const a = c.chart.chartArea; if (!a) return 'rgba(59,111,212,.1)';"
+& "        const g = c.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);"
+& "        g.addColorStop(0, 'rgba(59,111,212,.25)'); g.addColorStop(1, 'rgba(59,111,212,0)'); return g; },"
+& "      pointRadius: W.length > 40 ? 2 : 4, pointBackgroundColor: '#3b6fd4', pointBorderColor: '#fff', pointBorderWidth: 1.5,"
+// dash any gap longer than 8 weeks so absent data announces itself
+& "      segment: { borderDash: s => (s.p1.parsed.x - s.p0.parsed.x) > 4838400000 ? [6,6] : undefined } }] },"
+& "    options: { responsive: true, maintainAspectRatio: false, animation: { duration: 600 },"
+& "      plugins: { legend: { display: false }, annotation: { annotations: ann },"
+& "        tooltip: { backgroundColor: '#2c3e6b', bodyColor: '#fff', titleColor: '#a0b0d0', padding: 10, cornerRadius: 8, displayColors: false,"
+& "          callbacks: { title: i => fmt(new Date(i[0].parsed.x)),"
+& "            label: i => i.parsed.y.toFixed(1) + ' lbs' + (PT.ht ? '  |  BMI ' + (703*i.parsed.y/(PT.ht*PT.ht)).toFixed(1) : '') } } },"
+& "      scales: { x: { type: 'linear', ticks: { color: '#7a8aaa', font: { family: 'Inter', size: 10 }, maxTicksLimit: 7,"
+& "          callback: function(v) { const d = new Date(v); return (d.getMonth()+1) + '/' + String(d.getFullYear()).slice(2); } },"
+& "          grid: { color: '#f0f2f7' } },"
+& "        y: { min: yMin, max: yMax, ticks: { color: '#7a8aaa', font: { family: 'Inter', size: 10 }, callback: v => v + ' lb' }, grid: { color: '#f0f2f7' } } } } }); });"
+// ---------- body composition ----------
+& "sec('body_comp', function(){ const el = $('bc');"
+& "  if (!S.length) { el.innerHTML = ghost('No body composition scans on file',"
+& "    'SECA scan results appear here once recorded'); return; }"
+& "  const lastS = S[S.length-1]; const st = ago(lastS.d);"
+& "  let head = '';"
+// stale scans are called out rather than shown as if current
+& "  if (st > 365) head = ghost('Body composition is ' + agoTxt(st),"
+& "    'Last scan ' + fmt(lastS.d) + ' - values below may no longer reflect current status', true);"
+& "  let h = head + '<div class=\"row\"><span class=\"k\">Latest scan</span><span class=\"v\">' + fmt(lastS.d) + '<span class=\"sub2\">' + agoTxt(st) + '</span></span></div>';"
+& "  h += lastS.fat != null ? row('Fat mass', lastS.fat.toFixed(1) + ' lbs' + (lastS.pct != null ? '<span class=\"sub2\">' + lastS.pct.toFixed(1) + '% body fat</span>' : '')) : row('Fat mass', 'not recorded', true);"
+& "  h += lastS.smm != null ? row('Skeletal muscle mass', lastS.smm.toFixed(1) + ' lbs') : row('Skeletal muscle mass', 'not recorded', true);"
+// v2.0 VAT banding (OMA clinical practice statement, DXA/BIA pound classes):
+// optimal <1 lb; high risk >=2 lbs women / >=3 lbs men; Asian-population
+// thresholds lowered to ~1.5/2.2 lbs. SECA reports LITERS; adipose ~0.92 kg/L
+// so 1 L ~ 2.03 lbs. Per OMA, BIA VAT is hydration/algorithm dependent -
+// the within-patient TREND is shown alongside and is the more reliable signal.
+// (African American thresholds noted as lower by OMA but not quantified - not coded.)
+& "  if (lastS.vat != null) { const vlbs = lastS.vat * 2.03;"
+& "    const isFm = PT.sex && PT.sex.toLowerCase().indexOf('f') === 0;"
+& "    const asian = /asian/i.test(PT.race || '');"
+& "    const hiT = asian ? (isFm ? 1.5 : 2.2) : (isFm ? 2 : 3);"
+& "    const cls = vlbs < 1 ? 'z1' : vlbs < hiT ? 'z3' : 'z4';"
+& "    const txt = vlbs < 1 ? 'optimal' : vlbs < hiT ? 'intermediate - check glucose, lipids, BP' : 'high risk';"
+& "    const v0 = S.find(o => o.vat != null); let trend = '';"
+& "    if (v0 && v0.vat != null && v0 !== lastS) { const d = lastS.vat - v0.vat;"
+& "      trend = ' · ' + (d <= 0 ? '↓' : '↑') + Math.abs(d).toFixed(2) + ' L since ' + fmt(v0.d); }"
+& "    h += '<div class=\"row\"><span class=\"k\">Visceral adipose tissue</span><span class=\"v ' + cls + '\">' + lastS.vat.toFixed(2) + ' L'"
+& "      + '<span class=\"sub2\">≈ ' + vlbs.toFixed(1) + ' lbs · ' + txt + trend + '</span></span></div>'; }"
+& "  else h += row('Visceral adipose tissue', 'not recorded', true);"
+// the lean-mass question: what fraction of loss was fat?
+// v2.1 FIX: fat-fraction previously used NET SCALE WEIGHT as the denominator,
+// so water shifts could mask muscle loss ("100% was fat" alongside "-2.4 lbs
+// muscle"). Now computed on a TISSUE basis: fatLost / (fatLost + muscleLost).
+// Muscle gain alongside fat loss displays as its own (best-case) message.
+& "  if (S.length >= 2) { const a = S[0], b = lastS;"
+& "    if (a.w != null && b.w != null && a.fat != null && b.fat != null) {"
+& "      const dW = a.w - b.w, dF = a.fat - b.fat;"
+& "      const dM = (a.smm != null && b.smm != null) ? a.smm - b.smm : null;"
+& "      if (dW > 0.5) {"
+& "        if (dM != null && dM > 0.05) { const pf = dF / (dF + dM) * 100;"
+& "          const cls = pf >= 75 ? 'z1' : pf >= 60 ? 'z2' : 'z4';"
+& "          h += '<div class=\"row\"><span class=\"k\">Of ' + dW.toFixed(1) + ' lbs lost since ' + fmt(a.d) + '</span>'"
+& "            + '<span class=\"v ' + cls + '\">' + pf.toFixed(0) + '% of tissue loss was fat</span></div>'; }"
+& "        else if (dM != null) {"
+& "          h += '<div class=\"row\"><span class=\"k\">Of ' + dW.toFixed(1) + ' lbs lost since ' + fmt(a.d) + '</span>'"
+& "            + '<span class=\"v z1\">all fat' + (dM < -0.05 ? ', muscle +' + Math.abs(dM).toFixed(1) + ' lbs' : '') + '</span></div>'; }"
+& "        else { const pf = dF / dW * 100;"
+& "          h += '<div class=\"row\"><span class=\"k\">Of ' + dW.toFixed(1) + ' lbs lost since ' + fmt(a.d) + '</span>'"
+& "            + '<span class=\"v\">' + pf.toFixed(0) + '% was fat (no muscle data)</span></div>'; }"
+& "        if (dM != null) {"
+& "          h += row('Change in muscle mass', (dM > 0 ? '-' : '+') + Math.abs(dM).toFixed(1) + ' lbs'); } } } }"
+& "  if (S.length >= 2) h += '<div class=\"grid2\" style=\"margin-top:10px\">'"
+& "    + '<div><div class=\"bclbl\">Fat mass (lbs)</div><div class=\"chart-wrap sm\"><canvas id=\"bchart1\"></canvas></div></div>'"
+& "    + '<div><div class=\"bclbl\">Skeletal muscle (lbs)</div><div class=\"chart-wrap sm\"><canvas id=\"bchart2\"></canvas></div></div></div>';"
+& "  el.innerHTML = h;"
+// v1.8: two charts, each y-axis auto-scaled to its own series with 15% grace,
+// so a 7-lb muscle decline is as visible as a 40-lb fat decline.
+& "  function bcChart(id, key, color, bg) { new Chart($(id), { type: 'line',"
+& "    data: { datasets: [{ data: S.filter(o => o[key] != null).map(o => ({ x: o.d.getTime(), y: o[key] })),"
+& "      borderColor: color, backgroundColor: bg, borderWidth: 2.5, tension: .3, fill: true, pointRadius: 3,"
+& "      pointBackgroundColor: color, pointBorderColor: '#fff', pointBorderWidth: 1 }] },"
+& "    options: { responsive: true, maintainAspectRatio: false, animation: { duration: 600 },"
+& "      plugins: { legend: { display: false },"
+& "        tooltip: { backgroundColor: '#2c3e6b', bodyColor: '#fff', padding: 9, cornerRadius: 7, displayColors: false,"
+& "          callbacks: { title: i => fmt(new Date(i[0].parsed.x)), label: i => i.parsed.y.toFixed(1) + ' lbs' } } },"
+& "      scales: { x: { type: 'linear', ticks: { color: '#7a8aaa', font: { family: 'Inter', size: 10 }, maxTicksLimit: 5,"
+& "          callback: function(v) { const d = new Date(v); return (d.getMonth()+1) + '/' + String(d.getFullYear()).slice(2); } }, grid: { color: '#f0f2f7' } },"
+& "        y: { grace: '15%', ticks: { color: '#7a8aaa', font: { family: 'Inter', size: 10 } }, grid: { color: '#f0f2f7' } } } } }); }"
+& "  if (S.length >= 2) {"
+& "    bcChart('bchart1', 'fat', '#d4761c', 'rgba(230,126,34,.12)');"
+& "    bcChart('bchart2', 'smm', '#3b6fd4', 'rgba(59,111,212,.10)'); } });"
+// ---------- measurements ----------
+& "sec('measurements', function(){ const el = $('meas');"
+& "  const wa = latest(V, 'waist'), hi = latest(V, 'hip'), ne = latest(V, 'neck');"
+& "  if (!wa && !hi && !ne) { el.innerHTML = ghost('No measurements recorded',"
+& "    'Waist, hip, and neck circumference appear here once entered at a visit'); return; }"
+& "  let h = '';"
+& "  if (wa) { const st = ago(wa.d);"
+& "    const over = PT.sex && PT.sex.toLowerCase().indexOf('f') === 0 ? 35 : 40;"
+& "    h += '<div class=\"row\"><span class=\"k\">Waist</span><span class=\"v ' + (wa.v >= over ? 'z4' : 'z1') + '\">' + wa.v.toFixed(1) + '\"'"
+& "      + (wa.v >= over ? '<span class=\"sub2\">above ' + over + '\" threshold</span>' : '')"
+& "      + (st > 180 ? '<span class=\"sub2\">' + agoTxt(st) + '</span>' : '') + '</span></div>'; }"
+& "  else h += row('Waist', 'not measured', true);"
+& "  if (wa && PT.ht) { const r = wa.v / PT.ht;"
+& "    h += '<div class=\"row\"><span class=\"k\">Waist / height</span><span class=\"v ' + whtrZone(r) + '\">' + r.toFixed(2)"
+& "      + '<span class=\"sub2\">' + whtrTxt(r) + '</span></span></div>'; }"
+& "  h += hi ? row('Hip', hi.v.toFixed(1) + '\"') : row('Hip', 'not measured', true);"
+& "  if (wa && hi) { const whr = wa.v / hi.v;"
+& "    const hiRisk = PT.sex && PT.sex.toLowerCase().indexOf('f') === 0 ? 0.85 : 0.90;"
+& "    h += '<div class=\"row\"><span class=\"k\">Waist / hip</span><span class=\"v ' + (whr >= hiRisk ? 'z4' : 'z1') + '\">' + whr.toFixed(2) + '</span></div>'; }"
+& "  h += ne ? row('Neck', ne.v.toFixed(1) + '\"') : row('Neck', 'not measured', true);"
+& "  el.innerHTML = h; });"
+// ---------- vitals & function ----------
+& "sec('vitals', function(){ const el = $('vitals');"
+& "  const sb = latest(V, 'sbp'), pu = latest(V, 'pulse'), gr = latest(V, 'grip');"
+& "  if (!sb && !pu && !gr) { el.innerHTML = ghost('No vitals recorded',"
+& "    'Blood pressure, pulse, and grip strength appear here once entered'); return; }"
+& "  let h = '';"
+& "  if (sb) { const db = latest(V, 'dbp'); const s = sb.v, d = db ? db.v : null;"
+& "    const cls = s >= 140 || (d && d >= 90) ? 'z4' : s >= 130 || (d && d >= 80) ? 'z3' : 'z1';"
+& "    const st = ago(sb.d);"
+& "    h += '<div class=\"row\"><span class=\"k\">Blood pressure</span><span class=\"v ' + cls + '\">' + s + (d ? '/' + d : '')"
+& "      + '<span class=\"sub2\">' + fmt(sb.d) + (st > 180 ? ' · ' + agoTxt(st) : '') + '</span></span></div>'; }"
+& "  else h += row('Blood pressure', 'not recorded', true);"
+& "  h += pu ? row('Pulse', pu.v + ' bpm') : row('Pulse', 'not recorded', true);"
+& "  if (gr) { const st = ago(gr.d);"
+// v1.6: age- and sex-specific grip norms (user-provided tables, kg).
+// Device reads POUNDS; value is converted to kg for the lookup and both
+// units are displayed. Bands: weak (red) / normal / strong (green).
+& "    const GRIPF = [[11,11.8,21.6],[13,14.6,24.4],[15,15.5,27.3],[17,17.2,29.0],[19,19.2,31.0],[24,21.5,35.3],[29,25.6,41.4],[34,21.5,35.3],[39,20.3,34.1],[44,18.9,32.7],[49,18.6,32.4],[54,18.1,31.9],[59,17.7,31.5],[64,17.2,31.0],[69,15.4,27.2],[99,14.7,24.5]];"
+& "    const GRIPM = [[11,12.6,22.4],[13,19.4,31.2],[15,28.5,44.3],[17,32.6,52.4],[19,35.7,55.5],[24,36.8,56.6],[29,37.7,57.5],[34,36.0,55.8],[39,35.8,55.6],[44,35.5,55.3],[49,34.7,54.5],[54,32.9,50.7],[59,30.7,48.5],[64,30.2,48.0],[69,28.2,44.0],[99,21.3,35.1]];"
+& "    const tbl = PT.sex && PT.sex.toLowerCase().indexOf('f') === 0 ? GRIPF : GRIPM;"
+& "    const kg = gr.v / 2.2046;"
+& "    const band = PT.age != null ? tbl.find(r => PT.age <= r[0]) : null;"
+& "    let cls = '', txt = '';"
+& "    if (band) { const lo = band[1], hi = band[2];"
+& "      if (kg < lo) { cls = 'z4'; txt = 'weak for age (<' + lo + ' kg)'; }"
+& "      else if (kg > hi) { cls = 'z1'; txt = 'strong for age (>' + hi + ' kg)'; }"
+& "      else { cls = 'z1'; txt = 'normal for age (' + lo + '-' + hi + ' kg)'; } }"
+& "    h += '<div class=\"row\"><span class=\"k\">Grip strength</span><span class=\"v ' + cls + '\">' + gr.v + ' lbs'"
+& "      + '<span class=\"sub2\">' + kg.toFixed(1) + ' kg · ' + (txt || 'no age on file') + ' · ' + fmt(gr.d) + '</span></span></div>'; }"
+& "  else h += row('Grip strength', 'not measured', true);"
+& "  el.innerHTML = h; });"
+& "</" & "script>"
+)
