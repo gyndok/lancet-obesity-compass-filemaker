@@ -1,0 +1,71 @@
+// WeighIn helper fields v2 - 2026-10-03 - Obesity Management.
+// All five previously used positional fetches (GetNthRecord(...; Count(...)-1) or
+// Last(WeighIn::Weight)) that break when placeholder WeighIn rows exist (dates without
+// weights, including future appointment rows). The date helpers were also off by one row,
+// and CurrentWeight/TimeSinceLastWeighInDisplay could cite DIFFERENT rows (mismatched
+// weight vs "days ago"). v2: everything derives from the latest real row (Weight IS NOT
+// NULL, newest Date first) via ExecuteSQL, so all five always agree.
+// ALL five fields stay UNSTORED ("Do not store calculation results" checked) and keep
+// their existing result types. Paste order does not matter; WeightLost,
+// PercentWeightLossDisplay and TimeSinceLastWeighIn reference the fixed fields.
+// Empty (not zero) when the patient has no weigh-in rows with an actual weight.
+
+
+// ============================================================
+// 1) CurrentWeight  (field id 191, Number, unstored)
+//    was: Last ( WeighIn::Weight )
+// ============================================================
+Let ( [
+~w = ExecuteSQL (
+ "SELECT \"Weight\" FROM \"WeighIn\"
+  WHERE \"AccountNumber\" = ? AND \"Weight\" IS NOT NULL AND \"Date\" IS NOT NULL
+  ORDER BY \"Date\" DESC FETCH FIRST 1 ROWS ONLY" ; "" ; "" ; AccountNumber )
+] ;
+If ( not IsEmpty ( ~w ) and ~w ≠ "?" ; GetAsNumber ( ~w ) )
+)
+
+
+// ============================================================
+// 2) TimeSinceLastWeighInDisplay  (field id 129, Number, unstored)
+//    was: Get(CurrentDate) - GetNthRecord(WeighIn::Date; Count(WeighIn::Date) - 1)
+// ============================================================
+Let ( [
+~iso = ExecuteSQL (
+ "SELECT \"Date\" FROM \"WeighIn\"
+  WHERE \"AccountNumber\" = ? AND \"Weight\" IS NOT NULL AND \"Date\" IS NOT NULL
+  ORDER BY \"Date\" DESC FETCH FIRST 1 ROWS ONLY" ; "" ; "" ; AccountNumber )
+] ;
+If ( not IsEmpty ( ~iso ) and ~iso ≠ "?" ;
+ Get ( CurrentDate ) - Date ( Middle ( ~iso ; 6 ; 2 ) ; Middle ( ~iso ; 9 ; 2 ) ; Left ( ~iso ; 4 ) ) )
+)
+
+
+// ============================================================
+// 3) WeightLost  (field id 196, Number, unstored)
+//    was: Weightpounds - Last ( WeighIn::Weight )
+//    now leans on the fixed CurrentWeight - one source of truth
+// ============================================================
+If ( not IsEmpty ( CurrentWeight ) and Weightpounds > 0 ; Weightpounds - CurrentWeight )
+
+
+// ============================================================
+// 4) PercentWeightLossDisplay  (field id 143, Number, unstored)
+//    was: If(IsEmpty(TimeSinceLastWeighInDisplay)=False;
+//         Truncate(((Weightpounds-Last(WeighIn::Weight))/Weightpounds)*100;1))
+// ============================================================
+If ( not IsEmpty ( CurrentWeight ) and Weightpounds > 0 ;
+ Truncate ( ( ( Weightpounds - CurrentWeight ) / Weightpounds ) * 100 ; 1 ) )
+
+
+// ============================================================
+// 5) TimeSinceLastWeighIn  (field id 128, Text, unstored) - BONUS
+//    was: six repeated GetNthRecord(Count-1) fetches formatted as
+//    days / weeks / years+months; now formats the fixed field #2
+// ============================================================
+Let ( d = TimeSinceLastWeighInDisplay ;
+Case (
+ IsEmpty ( d ) ; "" ;
+ d < 14 ; d & " days" ;
+ d < 365 ; Round ( d / 7 ; 1 ) & " weeks" ;
+ Int ( d / 365 ) & " years " & Int ( Mod ( d ; 365 ) / 30 ) & " months"
+) )
