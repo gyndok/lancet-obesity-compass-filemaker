@@ -1,5 +1,5 @@
 # HANDOFF.md — Obesity Management FileMaker Development
-**Written:** 2026-09-03; updated 2026-09-06 (E/M prompts, offline hardening). Covers the Aug 21 + Sep 2–6 sessions (GitHub backup, MetabolicFlags, LifestyleRx, PatientList, PNList in the prenatal repo, E/M coding, de-CDN). Successor to the Aug 20 handoff; everything that mattered is restated or superseded here.
+**Written:** 2026-09-03; updated 2026-10-03 (weigh-in positional-fetch purge; prior updates 2026-09-06 E/M + de-CDN, 2026-09-26 peak weight, 2026-10-01 MetabolicFlags v2.2, 2026-10-02 Patient Ed in prenatal repo). Covers the Aug 21 + Sep 2–6 + Sep 26 + Oct 1–3 sessions (GitHub backup, MetabolicFlags, LifestyleRx, PatientList, PNList in the prenatal repo, E/M coding, de-CDN). Successor to the Aug 20 handoff; everything that mattered is restated or superseded here.
 
 ## Who / What
 Geffrey Klein, MD — OB/GYN + obesity medicine (WSOC + Mochi telemedicine). FileMaker 2025 (v26) file **Obesity Management.fmp12** (~1,221 patients, ~841 active). Physician-developer; comfortable with Manage Database, Script Workspace, calc pasting, FmClipTools. Nurse handles patient outreach (that's why OutreachWorklist was shelved).
@@ -11,21 +11,22 @@ Repo: **github.com/gyndok/lancet-obesity-compass-filemaker** (main). Push via th
 - `filemaker/patient-list/` — PLApp v1.1 + calc + SetPatientStatus + PLNav + README (DEPLOYED).
 - `filemaker/outreach-worklist/` — OWApp v1.0 + calc + MarkOutreach (BUILT + node-tested, **NOT deployed** — shelved; README has 20-min install if revived).
 - `filemaker/decdn/` — offline hardening (Sep 6): post-edit PtDash_Head / GoogleChart HTML / HTML_Audit calc texts + README with the library inventory.
-- `filemaker/` root — MetabolicFlags calc v2.0, LifestyleRx (see below), Interview_Full v1.2, InterviewSummary, MochiRefillMsg v1.1, SaveInterview script, HPISummary_newpatient_prompt_calc.txt (E/M version, Sep 6).
+- `filemaker/` root — MetabolicFlags calc v2.2 (Oct 1: leading-number lab parser + per-analyte bounds + same-day HOMA-IR pairing), LifestyleRx (see below), Interview_Full v1.2, InterviewSummary, MochiRefillMsg v1.2 (Oct 3), PercentWeightLoss v3 (Oct 3), WeighInHelpers_calc.txt (Oct 3: v2 of the five WeighIn helper fields), SaveInterview script, HPISummary_newpatient_prompt_calc.txt (E/M version, Sep 6), Labsbefore_doximity_template.md v2 (Oct 1). `filemaker/ptdash/` — PtDash_Body v2.3 + Body2 v2.1 (Sep 26: HPIHighestWeight peak-weight tile/badge/marker, deployed).
 Interview repo lineage (v1 web / v2 desktop / v3 FM) unchanged.
-Prenatal Record work lives in **github.com/gyndok/prenatal-record-filemaker** (private): PNList app/calc/PNNav + HTMLChartPrenatal2.
+Prenatal Record work lives in **github.com/gyndok/prenatal-record-filemaker** (private): PNList app/calc/PNNav + HTMLChartPrenatal2 + `filemaker/patient-ed/` (Patient Education system, Oct 2).
 
 ## Deployed systems (verified in production)
 1. **PanelDash v1.0** (Data Visualization; deployed Body/Body2 are v1.0, not v1.1).
-2. **MochiRefillMsg v1.1** (OM calc).
+2. **MochiRefillMsg v1.2** (OM calc, Oct 3) — weight/date/progress from one real WeighIn row via SQL; no longer depends on the WeighIn helper fields.
 3. **Lancet interview** (Code Library LOCEngine 1.0 / LOCQuestions 1.1 / LOCApp 1.2; Interview_Full v1.2).
 4. **ReturnVisit** (RVApp v1.8 / ReturnVisit_Full v1.7 / SaveReturnVisit 69 steps).
-5. **MetabolicFlags v2.0** (OM unstored calc) — parses `Labsbefore` free text (lines `YYYY-MM-DD — Name — Value [range]`, newest ISO date wins per analyte, urine-glucose "Negative" skipped) → HOMA-IR (gluc×ins/405) + FIB-4 (age×AST/(PLT×√ALT), age at AST draw, ≥65 cutoff 2.0) with NORMAL/BORDERLINE/INDETERMINATE/ABNORMAL flags. Tiers: HOMA <1/<2/<3/≥3; FIB-4 1.3/2.67. Empty if no data. Uses While() loops — no CF needed.
+5. **MetabolicFlags v2.2** (OM unstored calc; v2.1 Oct 1 fixed GetAsNumber("246x10E9")-style platelet parses with a leading-number parser + per-analyte bounds, v2.2 pairs glucose+insulin same-day only for HOMA-IR and explains when dates don't align) — parses `Labsbefore` free text (lines `YYYY-MM-DD — Name — Value [range]`, newest ISO date wins per analyte, urine-glucose "Negative" skipped) → HOMA-IR (gluc×ins/405) + FIB-4 (age×AST/(PLT×√ALT), age at AST draw, ≥65 cutoff 2.0) with NORMAL/BORDERLINE/INDETERMINATE/ABNORMAL flags. Tiers: HOMA <1/<2/<3/≥3; FIB-4 1.3/2.67. Empty if no data. Uses While() loops — no CF needed.
 6. **VisitSummary Copy** (Doximity prompt field) = `ScrubPHI(VisitSummary) & appended "Metabolic Flags:" block` — every Doximity prompt now carries dated HOMA-IR/FIB-4.
 7. **LifestyleRx v1.0** (OM unstored calc, delivered Sep 2) — verbatim exercise prescription block + personalized diet rec for nutritionist consult (RMR cascade BIABasalMetabolicRate→Mifflin, RMR−500 with 1200F/1500M floor matching VisitSummary, protein 1.2 g/kg via proteinIntake w/ CurrentWeight fallback). *Confirm it was pasted/verified — delivered but deployment not explicitly confirmed in-chat.*
 8. **E/M coding, Mochi-only (Sep 6)** — follow-up `VisitSummary` calc (Visits, id 33) got a `~em` addendum appended to the Mochi branch only (AMA MDM 3-element rationale + time-based alternative, codes 99202-99215); the new-patient prompt calc — field **`HPISummary`** (id 92) — got "11. E/M Code and Rationale" inserted in its Mochi literal (AVS renumbered to 12, Output Requirements line extended). WSOC branches untouched. Both calc texts BANKED Sep 6 from the fresh DDR: `filemaker/returnvisit/VisitSummary_calc.txt` (updated) + `filemaker/HPISummary_newpatient_prompt_calc.txt`.
 9. **Offline hardening / de-CDN (Sep 6)** — every live web viewer in BOTH files now inlines its chart libraries from in-file storage; zero external requests; all verified with Wi-Fi off. Trigger: a half-dead internet gateway blanked every CDN-dependent viewer in both files simultaneously (first misdiagnosed as FileMaker WebKit blocking data:-URL fetches — it was the network). Full details, library inventory (NEVER delete `Globals::ChartJS_Source` / `Annotation_Source`, Code Library `Annotation`/`ChartJS`/`Highcharts` records), and post-edit calc texts: `filemaker/decdn/README.md` + prenatal repo. Patient-dashboard viewer address is now Base64 (`"data:text/html;base64," & Base64Encode(Head & Body & Body2)`) with `<meta charset='utf-8'>`.
 10. **PatientList v1.1** (replaces main menu + search screens) — layout "Patient List" on Data Visualization, viewer object `plviewer`, Code Library `PLApp` v1.1, calc `PatientList_Full`. Instant search (name/acct/DOB both formats/Mochi MR/phone; autofocus + select-all → Mochi MR workflow = land, ⌘V, done). Chips All/WSOC/Mochi + Active/Inactive/Everyone + sorts A-Z/Overdue/Top-loss. 200-row render cap. Scripts: SetPatientStatus (optimistic toggle, self-correcting via Refresh Object), PLNav (param new/import/data → wired natively). v1.1 guard: real rows need 14 pipe-fields + numeric acct (kills phantom rows from CR-containing Prescription text). Count verified = native 1221. Old menu/search layouts still exist — retire after ~1 week of trust.
+11. **Weigh-in positional-fetch purge (Oct 3)** — `PercentWeightLoss` v3 and `MochiRefillMsg` v1.2 verified in production; both now pull the latest REAL weigh-in (Weight IS NOT NULL, newest Date first) with date+weight from the same SQL row. The five helper fields (`CurrentWeight` 191, `TimeSinceLastWeighInDisplay` 129, `WeightLost` 196, `PercentWeightLossDisplay` 143, `TimeSinceLastWeighIn` 128) got v2 replacements in `filemaker/WeighInHelpers_calc.txt` — delivered Oct 3, paste + verify pending. Also Sep 26: **PtDash v2.3** (peak-weight feature) deployed; Oct 1: **Doximity Labsbefore template v2**; Oct 2: **Patient Education system** deployed in the prenatal file (see prenatal repo `filemaker/patient-ed/`).
 
 ## Hard-won lessons (all Aug 20 lessons still apply, plus)
 11. **CR-continuation phantom rows**: any SELECTed text field containing returns spawns fake rows; put risky text fields LAST in the SELECT and guard in JS (field-count + numeric-key test). Bit PatientList (36 phantoms from med-guide text pasted in one patient's Prescription).
@@ -35,6 +36,8 @@ Prenatal Record work lives in **github.com/gyndok/prenatal-record-filemaker** (p
 15. Multiple `<Script>` nodes appear per name in DDR (catalog stubs with 0 steps) — take the longest when extracting.
 16. **Correlated viewer failures = check the network first.** When every CDN-dependent viewer breaks at once across files while self-contained ones work, suspect the gateway/VPN/DNS before touching any calc (Sep 6: a half-dead home gateway mimicked a FileMaker WebKit change; Mail IMAP timeouts were the tell). Test from another device on the same network, then off it.
 17. **Inline libraries beat CDNs in FM web viewers.** Store library source in global fields / Code Library records and emit `"<script>" & source & "</" & "script>"` — charts then render with no internet at all. Pinning is unchanged (the CDN tags were version-pinned anyway); upgrading = paste new source into one place.
+18. **Positional fetches on related sets are a trap.** `GetNthRecord(related; Count(related)-1)` and `Last(related::field)` silently break when placeholder rows exist (WeighIn rows with a date but no weight, incl. FUTURE appointment rows) — and two such fetches can cite two different rows (weight from one, "days ago" from another). Fix: one `ExecuteSQL("... WHERE AccountNumber=? AND \"Weight\" IS NOT NULL AND \"Date\" IS NOT NULL ORDER BY \"Date\" DESC FETCH FIRST 1 ROWS ONLY")` row for everything. ExecuteSQL dates come back ISO: `Date(Middle(iso;6;2); Middle(iso;9;2); Left(iso;4))`. Bit PercentWeightLoss + MochiRefillMsg + all five WeighIn helpers.
+19. **Scripted Go to Layout round-trips reset tab controls** to their default panel. Create side-table records in an off-screen New Window (Top/Left 5000, close after) so the user's window never changes layout (Patient Ed print logging, Oct 2).
 
 ## Data chores (open)
 - **Scroggins, acct 10149**: Prescription contains 36 lines of pasted GLP-1 med-guide text — clear + re-select drug (likely one of PanelDash's "Other" slice). RV app self-heals on next visit save.
@@ -42,15 +45,16 @@ Prenatal Record work lives in **github.com/gyndok/prenatal-record-filemaker** (p
 - Terzepatide ghost sweep: RAN Aug 21, **zero hits** — closed.
 
 ## Open threads (priority order)
-1. Retire old main menu + search layouts once PatientList has a week of trust.
-2. Confirm LifestyleRx v1.0 deployed; consider surfacing it (VisitSummary Copy append like MetabolicFlags, or AVS).
-3. ReturnVisit polish (from Aug 20 list): MDMVisits vs ProblemList seed; Doximity card when includePrompt=No; SECA edit-load; double-Save duplicate summary in AI Plan.
-4. PanelDash: decide whether to paste the delivered v1.1 Body/Body2 (legend bottom, single-line breaks) — repo has deployed v1.0.
-5. PanelDash sixth card ("on nothing + not losing"); PtDash print script; SaveInterview write-back mapping; Labsbefore→Labs migration question.
-6. OutreachWorklist: shelved (nurse covers it); revival = filemaker/outreach-worklist/README.md.
+1. Paste + verify WeighInHelpers v2 (five fields), then re-upload DDR.
+2. Retire old main menu + search layouts once PatientList has a week of trust.
+3. Confirm LifestyleRx v1.0 deployed; consider surfacing it (VisitSummary Copy append like MetabolicFlags, or AVS).
+4. ReturnVisit polish (from Aug 20 list): MDMVisits vs ProblemList seed; Doximity card when includePrompt=No; SECA edit-load; double-Save duplicate summary in AI Plan.
+5. PanelDash: decide whether to paste the delivered v1.1 Body/Body2 (legend bottom, single-line breaks) — repo has deployed v1.0.
+6. PanelDash sixth card ("on nothing + not losing"); PtDash print script; SaveInterview write-back mapping; Labsbefore→Labs migration question.
+7. OutreachWorklist: shelved (nurse covers it); revival = filemaker/outreach-worklist/README.md.
 
 ## Working environment for Claude (rebuild in new session)
-- DDR: latest used **Sep 6, 2026** (post-de-CDN, post-E/M; 11MB plain ASCII — no iconv needed, and a different XML shape than the Aug 20 export: calc text lives in `<Calculation><Text><![CDATA[...]]>` and Field attributes are ordered `id, name, fieldtype`). Re-upload after future schema changes.
+- DDR: latest used **Sep 26, 2026** (`Obesity Management_fmp12.xml` — upload the file XML, not the Summary). Still the source for field defs (the Oct 3 helper-field extraction came from it). Re-upload after the WeighInHelpers v2 paste + future schema changes.
 - Canonical sources + harnesses in `/home/claude/loc-port/`: pl_app.js + test_pl.js (31 asserts), ow_app.js + test_ow.js (36), rvapp/RVApp_source.txt, extract/ (DDR calc+script exports). **The repo is now the canonical backup — regenerate locals from github.com/gyndok/lancet-obesity-compass-filemaker.**
 - obesity-management MCP (patient CRUD via AppleScript) needs FileMaker open on the Mac; no raw-SQL tool — use Data Viewer for ad-hoc queries.
 - Iteration protocol unchanged: node harness + FM-eval sim before delivery; app changes = paste Code Library record; verify version tail; one step at a time with screenshots; Export Field Contents (never clipboard) for retrieving big field contents.
