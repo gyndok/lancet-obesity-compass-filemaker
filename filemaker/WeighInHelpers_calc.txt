@@ -69,3 +69,51 @@ Case (
  d < 365 ; Round ( d / 7 ; 1 ) & " weeks" ;
  Int ( d / 365 ) & " years " & Int ( Mod ( d ; 365 ) / 30 ) & " months"
 ) )
+
+
+// ################ BATCH 2 - 2026-10-03 (same session) ################
+// Three more main-layout fields off the positional pattern, found by sweeping
+// the fresh Oct 3 DDR. Pasted + verified same day. Left as-is intentionally:
+// Last(Visits::VisitSummary)/LastAOMRx/ProblemList FIB-4/returntoclinic fetches
+// ("most recent non-empty entry" on Visits is the wanted semantics; Visits rows
+// are created chronologically and have no placeholders) and the SECA body-comp
+// family (scans entered complete; optional cleanup later). HighChartHTML2
+// (legacy Highcharts-CDN chart, unused) marked for retirement instead of repair.
+
+
+// ============================================================
+// 6) CurrentBMI  (field id 192, Number, unstored)
+//    was: Last ( WeighIn::BMI )
+// ============================================================
+Let ( [
+~b = ExecuteSQL (
+ "SELECT \"BMI\" FROM \"WeighIn\"
+  WHERE \"AccountNumber\" = ? AND \"BMI\" IS NOT NULL AND \"Date\" IS NOT NULL
+  ORDER BY \"Date\" DESC FETCH FIRST 1 ROWS ONLY" ; "" ; "" ; AccountNumber )
+] ;
+If ( not IsEmpty ( ~b ) and ~b ≠ "?" ; GetAsNumber ( ~b ) )
+)
+
+
+// ============================================================
+// 7) LastWeight  (field id 130, Text, unstored)
+//    was: GetNthRecord ( WeighIn::Weight ; Count ( WeighIn::Weight ) + 1 ) & " lbs"
+//    (a Count+1 hack). Now formats the fixed CurrentWeight; falls back to the
+//    enrolled weight when no weigh-ins exist. Semantic change: with exactly one
+//    weigh-in it now shows that weigh-in rather than Weightpounds.
+// ============================================================
+If ( IsEmpty ( CurrentWeight ) ; Weightpounds & " lbs" ; CurrentWeight & " lbs" )
+
+
+// ============================================================
+// 8) lastVisit  (field id 189, Date, unstored)
+//    was: If ( IsEmpty ( Last ( Visits::Date ) ) ; DateOfFirstVisit ; Last ( Visits::Date ) )
+//    Feeds MochiRefillMsg's 90-day cadence; MAX(Date) is order-proof against
+//    back-entered visits.
+// ============================================================
+Let ( [
+~iso = ExecuteSQL ( "SELECT MAX(\"Date\") FROM \"Visits\" WHERE \"AccountNumber\" = ? AND \"Date\" IS NOT NULL" ; "" ; "" ; AccountNumber )
+] ;
+If ( IsEmpty ( ~iso ) or ~iso = "?" ; DateOfFirstVisit ;
+ Date ( Middle ( ~iso ; 6 ; 2 ) ; Middle ( ~iso ; 9 ; 2 ) ; Left ( ~iso ; 4 ) ) )
+)
